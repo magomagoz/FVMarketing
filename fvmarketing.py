@@ -97,9 +97,43 @@ if st.session_state.data_found:
         'city': "vostra sede",
         'industry': "Innovazione"
     })
+
+    # ... dopo aver generato 'corpo_mail' iniziale ...
+
+    if st.session_state.data_found:
+        # 1. Generiamo la mail base
+        bozza_iniziale = mailer.generate_body('email_dg.html', {
+            'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
+            'company_name': data['corp']['name'],
+            'city': "vostra sede",
+            'industry': "Innovazione"
+        })
     
-    with st.container(border=True):
-        st.components.v1.html(corpo_mail, height=300, scrolling=True)
+        st.subheader("✍️ Personalizza il messaggio")
+        st.info("Puoi modificare il testo qui sotto prima di inviare.")
+        
+        # 2. Campo di testo modificabile (TextArea)
+        testo_personalizzato = st.text_area(
+            "Corpo della mail:", 
+            value=bozza_iniziale, 
+            height=300
+        )
+    
+        # 3. Visualizzazione dinamica dell'anteprima modificata
+        with st.expander("👁️ Anteprima Finale"):
+            st.components.v1.html(testo_personalizzato, height=350, scrolling=True)
+    
+        # 4. Bottone di invio che usa il testo modificato
+        if st.button("🚀 INVIA MAIL PERSONALIZZATA", type="primary", use_container_width=True):
+            with st.spinner("Invio in corso..."):
+                # Qui passiamo 'testo_personalizzato' invece di quello generato dal template
+                successo = mailer.send_mail(data['email'], f"Proposta per {data['corp']['name']}", testo_personalizzato)
+                if successo:
+                    st.balloons()
+                    st.success(f"Mail inviata a {data['lead']['name']}!")
+    
+        with st.container(border=True):
+            st.components.v1.html(corpo_mail, height=300, scrolling=True)
 
     # Bottoni decisionali
     c1, c2 = st.columns(2)
