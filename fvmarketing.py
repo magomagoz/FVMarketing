@@ -7,7 +7,8 @@ from mailer import Mailer
 # Configurazione Mailer (Mock per il test)
 mailer = Mailer("smtp.gmail.com", 465, "test@test.it", "password")
 
-st.title("🚀 Business Lead Finder")
+st.image("banner.png", use_container_width=True)
+#st.title("🚀 Business Lead Finder")
 
 # --- FASE 1: INPUT ---
 with st.sidebar:
