@@ -53,62 +53,59 @@ if search_button and company_input:
 if st.session_state.data_found:
     data = st.session_state.data_found
     
-    # 1. Creiamo le colonne SOLO per i dati in alto
+    # 1. Colonne in alto per i dati (CHIUDIAMOLE SUBITO DOPO)
     col1, col2 = st.columns(2)
-    
     with col1:
         st.subheader("🏢 Dati Aziendali")
         st.write(f"**Ragione Sociale:** {data['corp']['name']}")
-        st.write(f"**Indirizzo:** {data['corp']['address']}")
-    
     with col2:
         st.subheader("👥 Decision Maker")
         if data.get('leads'):
             opzioni = [f"{l['name']} ({l['source']})" for l in data['leads']]
             scelta = st.selectbox("Seleziona destinatario:", opzioni)
             index_scelto = opzioni.index(scelta)
-            # Aggiorniamo il lead selezionato nello stato
             st.session_state.data_found['lead'] = data['leads'][index_scelto]
-            
-            with st.expander("Dettagli profilo"):
-                st.write(f"📝 *{st.session_state.data_found['lead']['snippet']}*")
-        else:
-            st.warning("Nessun profilo trovato.")
-
-    # --- 2. USCIAMO DALLE COLONNE (Torniamo a tutta larghezza) ---
+    
+    # 2. USCITA DALLE COLONNE - Torniamo a tutta larghezza
     st.divider()
 
-    # Recuperiamo il nome per il "Gentile..."
+    # 3. LOGICA NOME E TESTO (Sincronizzazione)
+    # Recuperiamo il nome selezionato sopra
     current_lead = st.session_state.data_found.get('lead')
     nome_dest = current_lead['name'] if (current_lead and current_lead.get('name')) else "Direttore"
 
-    # Inizializziamo la bozza completa (se non esiste o se è diversa dal nome attuale)
-    testo_base = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
-    
-    if 'bozza_editor' not in st.session_state or nome_dest not in st.session_state.bozza_editor:
-        st.session_state.bozza_editor = testo_base
+    # Se la bozza non esiste o abbiamo cambiato azienda, carichiamo il template
+    if 'bozza_editor' not in st.session_state:
+        # Generiamo la prima bozza "sporca" con il nome corretto
+        st.session_state.bozza_editor = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
 
     st.subheader("📧 Personalizza la Comunicazione")
 
-    # Ora questo expander sarà largo quanto tutto lo schermo!
-    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
+    # 4. BOX DI MODIFICA (Largo)
+    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=True):
         testo_chiaro = st.text_area(
             "Contenuto mail:", 
             value=st.session_state.bozza_editor, 
             height=300
         )
+        # Salviamo ogni modifica fatta a mano
         st.session_state.bozza_editor = testo_chiaro
 
-    # 3. ANTEPRIMA E INVIO (Sempre a tutta larghezza)
-    testo_formattato = testo_chiaro.replace("\n", "<br>")
-    anteprima_html = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_formattato})
-
+    # 5. ANTEPRIMA FINALE (Prende il testo ESATTO dell'editor sopra)
     st.subheader("✍️ Controlla e Invia")
+    
+    # Trasformiamo i ritorni a capo per l'HTML dell'anteprima
+    testo_per_anteprima = st.session_state.bozza_editor.replace("\n", "<br>")
+    
+    # Passiamo il testo modificato alla cornice HTML
+    anteprima_html = mailer.generate_body('email_dg.html', {
+        'corpo_testuale': testo_per_anteprima
+    })
+
     with st.container(border=True):
+        # Ora l'anteprima mostrerà il nome perché glielo passiamo dentro 'corpo_testuale'
         st.components.v1.html(anteprima_html, height=400, scrolling=True)
         
-        # ... qui metti i tuoi bottoni c1, c2 per l'invio ...
-    
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
