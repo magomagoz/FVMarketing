@@ -53,6 +53,7 @@ if search_button and company_input:
 if st.session_state.data_found:
     data = st.session_state.data_found
     
+    # 1. Creiamo le colonne SOLO per i dati in alto
     col1, col2 = st.columns(2)
     
     with col1:
@@ -62,55 +63,51 @@ if st.session_state.data_found:
     
     with col2:
         st.subheader("👥 Decision Maker")
-        # Usiamo i leads salvati nello stato
         if data.get('leads'):
             opzioni = [f"{l['name']} ({l['source']})" for l in data['leads']]
             scelta = st.selectbox("Seleziona destinatario:", opzioni)
             index_scelto = opzioni.index(scelta)
-            data['lead'] = data['leads'][index_scelto]
+            # Aggiorniamo il lead selezionato nello stato
+            st.session_state.data_found['lead'] = data['leads'][index_scelto]
             
             with st.expander("Dettagli profilo"):
-                st.write(f"📝 *{data['lead']['snippet']}*")
-                st.link_button(f"Vai al profilo {data['lead']['source']}", data['lead']['link'])
+                st.write(f"📝 *{st.session_state.data_found['lead']['snippet']}*")
         else:
-            st.warning("Nessun profilo social trovato.")
-            data['lead'] = None
+            st.warning("Nessun profilo trovato.")
 
-        st.divider()
+    # --- 2. USCIAMO DALLE COLONNE (Torniamo a tutta larghezza) ---
+    st.divider()
+
+    # Recuperiamo il nome per il "Gentile..."
+    current_lead = st.session_state.data_found.get('lead')
+    nome_dest = current_lead['name'] if (current_lead and current_lead.get('name')) else "Direttore"
+
+    # Inizializziamo la bozza completa (se non esiste o se è diversa dal nome attuale)
+    testo_base = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
+    
+    if 'bozza_editor' not in st.session_state or nome_dest not in st.session_state.bozza_editor:
+        st.session_state.bozza_editor = testo_base
+
+    st.subheader("📧 Personalizza la Comunicazione")
+
+    # Ora questo expander sarà largo quanto tutto lo schermo!
+    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
+        testo_chiaro = st.text_area(
+            "Contenuto mail:", 
+            value=st.session_state.bozza_editor, 
+            height=300
+        )
+        st.session_state.bozza_editor = testo_chiaro
+
+    # 3. ANTEPRIMA E INVIO (Sempre a tutta larghezza)
+    testo_formattato = testo_chiaro.replace("\n", "<br>")
+    anteprima_html = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_formattato})
+
+    st.subheader("✍️ Controlla e Invia")
+    with st.container(border=True):
+        st.components.v1.html(anteprima_html, height=400, scrolling=True)
         
-        # 1. Recuperiamo il nome corretto
-        nome_per_mail = data['lead']['name'] if (data.get('lead') and data['lead'].get('name')) else "Direttore"
-    
-        # 2. Inizializziamo la bozza solo la prima volta
-        if 'bozza_editor' not in st.session_state:
-            # Qui incolla il testo completo dell'IperAmmortamento che vuoi come base
-            st.session_state.bozza_editor = f"Gentile {nome_per_mail},\n\nLe scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026..."
-    
-        st.subheader("📧 Personalizza la Comunicazione")
-    
-        # 3. BOX DI MODIFICA (Editor)
-        with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
-            testo_chiaro = st.text_area(
-                "Contenuto mail:", 
-                value=st.session_state.bozza_editor, 
-                height=300,
-                key="main_editor" # Aggiungiamo una chiave unica
-            )
-            st.session_state.bozza_editor = testo_chiaro
-    
-        # 4. ANTEPRIMA SINCRONIZZATA
-        # Trasformiamo i ritorni a capo per l'HTML
-        testo_formattato = st.session_state.bozza_editor.replace("\n", "<br>")
-        
-        # Generiamo l'anteprima usando il testo dell'editor!
-        anteprima_html = mailer.generate_body('email_dg.html', {
-            'corpo_testuale': testo_formattato
-        })
-    
-        st.subheader("✍️ Controlla e Invia")
-        with st.container(border=True):
-            st.caption("👁️ Anteprima finale (quello che scrivi sopra apparirà qui)")
-            st.components.v1.html(anteprima_html, height=400, scrolling=True)
+        # ... qui metti i tuoi bottoni c1, c2 per l'invio ...
     
         st.divider()
         c1, c2 = st.columns(2)
