@@ -55,14 +55,38 @@ if st.session_state.data_found:
         st.write(f"**Indirizzo:** {data['corp']['address']}")
     
     with col2:
-        st.subheader("👤 Decision Maker")
-        if data['lead']:
-            st.write(f"**Nome:** {data['lead']['name']}")
-            st.write(f"**Ruolo:** Direttore Generale")
-            st.write(f"**Email:** {data['email']}")
+        #st.subheader("👤 Decision Maker")
+        #if data['lead']:
+            #st.write(f"**Nome:** {data['lead']['name']}")
+            #st.write(f"**Ruolo:** Direttore Generale")
+            #st.write(f"**Email:** {data['email']}")
+        #else:
+            #st.warning("Nessun contatto trovato.")
+    
+        st.subheader("👥 Possibili Decision Maker individuati")
+        
+        # Chiamata alla nuova funzione robusta
+        leads = search_decision_maker(data['corp']['name'])
+        
+        if leads:
+            # Creiamo un selettore per scegliere la persona corretta
+            opzioni = [f"{l['name']} ({l['source']})" for l in leads]
+            scelta = st.selectbox("Seleziona il destinatario della mail:", opzioni)
+            
+            # Recuperiamo i dettagli del lead selezionato
+            index_scelto = opzioni.index(scelta)
+            selected_lead = leads[index_scelto]
+            
+            with st.expander("Dettagli profilo trovato"):
+                st.write(f"📝 *{selected_lead['snippet']}*")
+                st.link_button(f"Vai al profilo {selected_lead['source']}", selected_lead['link'])
+                
+            # Aggiorniamo i dati per il template della mail
+            data['lead'] = selected_lead
         else:
-            st.warning("Nessun contatto trovato.")
+            st.warning("Nessun profilo social trovato. Verrà usato un destinatario generico.")
 
+    
     st.divider()
 
     # Anteprima della Mail
