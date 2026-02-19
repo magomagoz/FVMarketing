@@ -25,24 +25,25 @@ class Mailer:
             data['lead_name'] = self._format_name(data['lead_name'])
         return template.render(data)
 
-    def send_mail(self, to_email, subject, html_content):
-        """Invia materialmente la mail tramite SMTP."""
+
+    def send_mail(self, to_email, subject, body):
+    try:
         msg = MIMEMultipart()
-        msg['From'] = self.username
+        msg['From'] = self.user
         msg['To'] = to_email
         msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'html'))
 
-        msg.attach(MIMEText(html_content, 'html'))
-
-        try:
-            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                server.login(self.username, self.password)
-                server.send_message(msg)
-            print(f"✅ Email inviata con successo a: {to_email}")
-            return True
-        except Exception as e:
-            print(f"❌ Errore durante l'invio a {to_email}: {e}")
-            return False
+        # Se usi Gmail (smtp.gmail.com) con porta 587:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls() # Crittografia necessaria
+        server.login(self.user, self.password) # Password per le APP!
+        server.sendmail(self.user, to_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"❌ Errore tecnico invio: {e}")
+        return False
 
 # --- ESEMPIO DI UTILIZZO (per testare il singolo modulo) ---
 if __name__ == "__main__":
