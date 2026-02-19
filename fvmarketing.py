@@ -92,45 +92,48 @@ if st.session_state.data_found:
     # Anteprima della Mail
     st.subheader("📧 Anteprima Comunicazione")
 
-    if st.session_state.data_found:
-        # 1. Generiamo la mail base
-        bozza_iniziale = mailer.generate_body('email_dg.html', {
-            'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
-            'company_name': data['corp']['name'],
-            'city': "vostra sede",
-            'industry': "Innovazione"
-        })
+if st.session_state.data_found:
+    # 1. Recuperiamo i dati dalla sessione
+    data = st.session_state.data_found
     
-        st.subheader("✍️ Personalizza il messaggio")
-        st.info("Puoi modificare il testo qui sotto prima di inviare.")
-        
-        # 2. Campo di testo modificabile (TextArea)
-        testo_personalizzato = st.text_area(
-            "Corpo della mail:", 
-            value=bozza_iniziale, 
-            height=300
-        )
-    
-        # 3. Visualizzazione dinamica dell'anteprima modificata
-        with st.expander("👁️ Anteprima Finale"):
-            st.components.v1.html(testo_personalizzato, height=350, scrolling=True)
-    
-        # 4. Bottone di invio che usa il testo modificato
+    # 2. Generiamo la bozza iniziale (solo se non l'abbiamo già modificata)
+    bozza_base = mailer.generate_body('email_dg.html', {
+        'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
+        'company_name': data['corp']['name'],
+        'city': "vostra sede",
+        'industry': "Innovazione"
+    })
 
-    # Bottoni decisionali
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("🚀 INVIA MAIL PERSONALIZZATA", type="primary", use_container_width=True):
+    st.subheader("✍️ Personalizza e Invia")
+    
+    # 3. Campo di modifica (TextArea)
+    # Usiamo bozza_base come valore iniziale
+    testo_personalizzato = st.text_area(
+        "Modifica il corpo della mail qui:", 
+        value=bozza_base, 
+        height=350
+    )
+
+    # 4. Anteprima DINAMICA (mostra quello che scrivi nella text_area)
+    with st.container(border=True):
+        st.caption("👁️ Anteprima finale (quello che riceverà il cliente)")
+        st.components.v1.html(testo_personalizzato, height=300, scrolling=True)
+
+    # 5. Bottone di invio
+    if st.button("🚀 INVIA MAIL PERSONALIZZATA", type="primary", use_container_width=True):
+        if not data.get('email'):
+            st.error("Manca l'indirizzo email del destinatario!")
+        else:
             with st.spinner("Invio in corso..."):
-                # Qui passiamo 'testo_personalizzato' invece di quello generato dal template
-                successo = mailer.send_mail(data['email'], f"Proposta per {data['corp']['name']}", testo_personalizzato)
+                # IMPORTANTE: Passiamo 'testo_personalizzato', non 'bozza_base'!
+                successo = mailer.send_mail(
+                    data['email'], 
+                    f"Domanda rapida per {data['corp']['name']}", 
+                    testo_personalizzato
+                )
+                
                 if successo:
                     st.balloons()
-                    st.success(f"Mail inviata a {data['lead']['name']}!")
-    
-        with st.container(border=True):
-            st.components.v1.html(corpo_mail, height=300, scrolling=True)
-    with c2:
-        if st.button("❌ Scarta Lead", use_container_width=True):
-            st.info("Lead scartato.")
-            st.session_state.data_found = None # Reset
+                    st.success(f"✅ Mail inviata con successo a {data['lead']['name']}!")
+                    # Opzionale: puliamo lo stato per una nuova ricerca
+                    # st.session_state.data_found = None 
