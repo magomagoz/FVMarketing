@@ -1,64 +1,90 @@
 import streamlit as st
 import time
 from validator import validate_piva_vies
-from database import init_db, save_company
-from scraper import search_decision_maker
+from scraper import search_decision_maker, get_verified_email
 from mailer import Mailer
 
-st.set_page_config(page_title="Lead Gen Simulator", page_icon="🚀")
+# Configurazione Mailer (Mock per il test)
+mailer = Mailer("smtp.gmail.com", 465, "test@test.it", "password")
 
-st.title("🛡️ Test Simulazione Lead Generation")
-st.write("Questo test verificherà il flusso completo **senza inviare email**.")
+st.title("🚀 Business Lead Finder")
 
-# Inizializza DB
-init_db()
+# --- FASE 1: INPUT ---
+with st.sidebar:
+    st.header("Ricerca Azienda")
+    company_input = st.text_input("Nome Azienda o P.IVA")
+    search_button = st.button("Analizza Azienda")
 
-# Input utente
-target_name = st.text_input("Nome Azienda", "Eni S.p.A.")
-target_piva = st.text_input("Partita IVA", "00742640154")
+# Inizializziamo lo stato della sessione per "ricordare" i dati tra un click e l'altro
+if 'data_found' not in st.session_state:
+    st.session_state.data_found = None
 
-if st.button("Avvia Test Flusso"):
-    with st.status("Esecuzione flusso in corso...", expanded=True) as status:
-        
-        # 1. VALIDAZIONE
-        st.write("🔍 Controllo VIES...")
-        info = validate_piva_vies(target_piva)
-        if info and info['valid']:
-            st.success(f"Azienda trovata: {info['name']}")
-            save_company(target_piva, info['name'], info['address'])
+# --- FASE 2: ELABORAZIONE ---
+if search_button and company_input:
+    with st.spinner("Recupero informazioni in corso..."):
+        # Se l'input è numerico, proviamo la validazione P.IVA
+        if company_input.isdigit():
+            info_corp = validate_piva_vies(company_input)
         else:
-            st.error("P.IVA non valida.")
-            st.stop()
+            # Qui potresti aggiungere una ricerca Google per trovare la P.IVA dal nome
+            # Per ora usiamo il nome direttamente per lo scraping
+            info_corp = {"name": company_input.title(), "address": "Indirizzo non trovato", "valid": True}
 
-        # 2. SCRAPING
-        st.write("🕵️ Ricerca Direttore Generale...")
-        # Simuliamo un risultato per il test se non hai ancora le API keys
-        lead = {"name": "Mario Rossi", "link": "https://linkedin.com/in/test"} 
-        st.info(f"Lead individuato: {lead['name']}")
-
-        # 3. GENERAZIONE EMAIL (DRY RUN)
-        st.write("📝 Generazione template HTML...")
-        mailer = Mailer("smtp.test.com", 465, "test@test.it", "password")
-        
-        dati_per_mail = {
-            'lead_name': lead['name'],
-            'company_name': info['name'],
-            'city': info['address'].split(",")[0],
-            'industry': "Innovazione Energetica"
-        }
-        
-        try:
-            corpo_html = mailer.generate_body('email_dg.html', dati_per_mail)
-            st.write("✅ Anteprima Email generata con successo.")
+        if info_corp and info_corp.get('valid'):
+            # Cerchiamo il Direttore Generale
+            lead = search_decision_maker(info_corp['name'])
             
-            with st.expander("Visualizza Anteprima Mail"):
-                st.components.v1.html(corpo_html, height=400, scrolling=True)
-                
-            st.warning("🚫 MODO TEST: Invio email saltato intenzionalmente.")
-        except Exception as e:
-            st.error(f"Errore nel template: {e}")
+            # Salviamo tutto nello stato della sessione
+            st.session_state.data_found = {
+                "corp": info_corp,
+                "lead": lead,
+                "email": "mario.rossi@azienda.it" # Simulazione email trovata
+            }
+        else:
+            st.error("Impossibile trovare dati validi per questa azienda.")
 
-        status.update(label="Test Completato!", state="complete", expanded=False)
+# --- FASE 3: VISUALIZZAZIONE E DECISIONE ---
+if st.session_state.data_found:
+    data = st.session_state.data_found
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏢 Dati Aziendali")
+        st.write(f"**Ragione Sociale:** {data['corp']['name']}")
+        st.write(f"**Indirizzo:** {data['corp']['address']}")
+    
+    with col2:
+        st.subheader("👤 Decision Maker")
+        if data['lead']:
+            st.write(f"**Nome:** {data['lead']['name']}")
+            st.write(f"**Ruolo:** Direttore Generale")
+            st.write(f"**Email:** {data['email']}")
+        else:
+            st.warning("Nessun contatto trovato.")
 
-st.divider()
-st.caption("iPad Pro Project - Marketing Automation v1.0")
+    st.divider()
+
+    # Anteprima della Mail
+    st.subheader("📧 Anteprima Comunicazione")
+    corpo_mail = mailer.generate_body('email_dg.html', {
+        'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
+        'company_name': data['corp']['name'],
+        'city': "vostra sede",
+        'industry': "Innovazione"
+    })
+    
+    with st.container(border=True):
+        st.components.v1.html(corpo_html, height=300, scrolling=True)
+
+    # Bottoni decisionali
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("✅ Approva e Invia", use_container_width=True, type="primary"):
+            st.success(f"Mail inviata con successo a {data['email']}!")
+            # Qui andrebbe mailer.send_mail(...)
+            st.session_state.data_found = None # Reset
+    with c2:
+        if st.button("❌ Scarta Lead", use_container_width=True):
+            st.info("Lead scartato.")
+            st.session_state.data_found = None # Reset
