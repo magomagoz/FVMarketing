@@ -6,7 +6,15 @@ from mailer import Mailer
 
 # --- CONFIGURAZIONE ---
 # Usa st.secrets per non scrivere la password in chiaro su GitHub!
-mailer = Mailer("smtp.gmail.com", 465, "tua_mail@gmail.com", "tua_password_app")
+#mailer = Mailer("smtp.gmail.com", 465, "tua_mail@gmail.com", "tua_password_app")
+
+# In fvmarketing.py (all'inizio)
+mailer = Mailer(
+    host="smtp.gmail.com", 
+    port=465, 
+    user=st.secrets["MAIL_USER"], 
+    password=st.secrets["MAIL_PASSWORD"]
+)
 
 st.image("banner.png", use_container_width=True)
 
