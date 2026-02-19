@@ -1,72 +1,48 @@
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from jinja2 import Environment, FileSystemLoader
 import os
 
 class Mailer:
-    def __init__(self, smtp_server, smtp_port, username, password):
-        self.smtp_server = smtp_server
-        self.smtp_port = smtp_port
-        self.username = username
+    def __init__(self, host, port, user, password):
+        self.host = host
+        self.port = port
+        self.user = user
         self.password = password
-        # Inizializza Jinja2 per caricare i template dalla cartella /templates
+        # Configurazione Jinja2 per i template
         self.env = Environment(loader=FileSystemLoader('templates'))
 
-    def _format_name(self, name):
-        """Trasforma 'MARIO ROSSI' in 'Mario Rossi' per un tocco umano."""
-        return name.title() if name else "Direttore"
-
     def generate_body(self, template_name, data):
-        """Genera l'HTML della mail usando il template e i dati dei lead."""
+        """Genera l'HTML finale usando il template e i dati forniti."""
         template = self.env.get_template(template_name)
-        # Formattiamo il nome del lead prima di passarlo al template
-        if 'lead_name' in data:
-            data['lead_name'] = self._format_name(data['lead_name'])
         return template.render(data)
 
+    def send_mail(self, to_email, subject, html_content):
+        """Invia la mail formattata in HTML."""
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = self.user
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            # Attacchiamo il contenuto come HTML
+            msg.attach(MIMEText(html_content, 'html'))
 
-    def send_mail(self, to_email, subject, body):
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = self.user
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'html'))
-
-        # Se usi Gmail (smtp.gmail.com) con porta 587:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls() # Crittografia necessaria
-        server.login(self.user, self.password) # Password per le APP!
-        server.sendmail(self.user, to_email, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        st.error(f"❌ Errore tecnico invio: {e}")
-        return False
-
-# --- ESEMPIO DI UTILIZZO (per testare il singolo modulo) ---
-if __name__ == "__main__":
-    # Questi dati verranno solitamente passati dal main.py
-    # Per test: usa un account Gmail (con App Password) o un servizio tipo Mailtrap
-    config = {
-        'server': 'smtp.gmail.com',
-        'port': 465,
-        'user': 'tua_mail@gmail.com',
-        'pass': 'tua_password_app'
-    }
-    
-    mailer = Mailer(config['server'], config['port'], config['user'], config['pass'])
-    
-    dati_lead = {
-        'lead_name': 'MARIO ROSSI',
-        'company_name': 'Esempio SPA',
-        'industry': 'Digital Transformation',
-        'city': 'Milano',
-        'unsubscribe_link': 'https://tuosito.it/unsubscribe'
-    }
-    
-    # Assicurati che il file /templates/email_dg.html esista!
-    # html = mailer.generate_body('email_dg.html', dati_lead)
-    # mailer.send_mail('destinatario@test.it', 'Proposta per Esempio SPA', html)
-
+            # Gestione intelligente della connessione
+            if self.port == 465:
+                # Connessione SSL diretta (Porta 465)
+                server = smtplib.SMTP_SSL(self.host, self.port)
+            else:
+                # Connessione TLS (Porta 587)
+                server = smtplib.SMTP(self.host, self.port)
+                server.starttls()
+            
+            server.login(self.user, self.password)
+            server.send_message(msg)
+            server.quit()
+            return True
+        except Exception as e:
+            # Stampiamo l'errore per vederlo nei log di Streamlit
+            print(f"ERRORE MAILER: {e}")
+            return False
