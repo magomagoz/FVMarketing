@@ -91,14 +91,6 @@ if st.session_state.data_found:
 
     # Anteprima della Mail
     st.subheader("📧 Anteprima Comunicazione")
-    corpo_mail = mailer.generate_body('email_dg.html', {
-        'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
-        'company_name': data['corp']['name'],
-        'city': "vostra sede",
-        'industry': "Innovazione"
-    })
-
-    # ... dopo aver generato 'corpo_mail' iniziale ...
 
     if st.session_state.data_found:
         # 1. Generiamo la mail base
@@ -124,6 +116,10 @@ if st.session_state.data_found:
             st.components.v1.html(testo_personalizzato, height=350, scrolling=True)
     
         # 4. Bottone di invio che usa il testo modificato
+
+    # Bottoni decisionali
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("🚀 INVIA MAIL PERSONALIZZATA", type="primary", use_container_width=True):
             with st.spinner("Invio in corso..."):
                 # Qui passiamo 'testo_personalizzato' invece di quello generato dal template
@@ -134,14 +130,6 @@ if st.session_state.data_found:
     
         with st.container(border=True):
             st.components.v1.html(corpo_mail, height=300, scrolling=True)
-
-    # Bottoni decisionali
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("✅ Approva e Invia", use_container_width=True, type="primary"):
-            st.success(f"Mail inviata con successo a {data['email']}!")
-            # Qui andrebbe mailer.send_mail(...)
-            st.session_state.data_found = None # Reset
     with c2:
         if st.button("❌ Scarta Lead", use_container_width=True):
             st.info("Lead scartato.")
