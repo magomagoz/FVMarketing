@@ -89,53 +89,61 @@ if st.session_state.data_found:
 
     
     st.divider()
-
-    # Anteprima della Mail
-    st.subheader("📧 Personalizza la Comunicazione")
-
+# --- FASE 3: VISUALIZZAZIONE E DECISIONE ---
 if st.session_state.data_found:
-    # 1. Recuperiamo i dati dalla sessione
     data = st.session_state.data_found
     
-    # 2. Generiamo la bozza iniziale (solo se non l'abbiamo già modificata)
-    bozza_base = mailer.generate_body('email_dg.html', {
-        'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
-        'company_name': data['corp']['name'],
-        'city': "vostra sede",
-        'industry': "Innovazione"
+    # ... (tieni pure le tue colonne col1 e col2 per i dati aziendali) ...
+
+    st.divider()
+    st.subheader("📧 Personalizza la Comunicazione")
+
+    # --- QUI INSERISCI IL PUNTO 1 (LOGICA PULITA E COMPRIMIBILE) ---
+    
+    # 1. Prepariamo la bozza iniziale "pulita" solo se non esiste già
+    nome_destinatario = data['lead']['name'] if data['lead'] else "Direttore"
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = f"Gentile {nome_destinatario},\n\nLe scrivo perché seguo con interesse {data['corp']['name']}..."
+
+    # 2. BOX COMPRIMIBILE (PUNTO 1)
+    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
+        testo_chiaro = st.text_area(
+            "Edita il contenuto (scrivi normalmente senza tag HTML):", 
+            value=st.session_state.bozza_editor, 
+            height=300
+        )
+        # Aggiorniamo lo stato così la modifica "resta"
+        st.session_state.bozza_editor = testo_chiaro
+
+    # 3. TRASFORMAZIONE PER L'INVIO (Per far arrivare bene la mail di prova)
+    # Trasformiamo i ritorni a capo in tag HTML <br> per il Mailer
+    testo_formattato = testo_chiaro.replace("\n", "<br>")
+    
+    # Generiamo l'HTML finale inserendo il testo nella "cornice" del template
+    anteprima_finale_html = mailer.generate_body('email_dg.html', {
+        'corpo_testuale': testo_formattato
     })
 
-    
-    # 3. Campo di modifica (TextArea)
-    # Usiamo bozza_base come valore iniziale
-    testo_personalizzato = st.text_area(
-        "Modifica il corpo della mail qui:", 
-        value=bozza_base, 
-        height=350
-    )
-
     st.subheader("✍️ Controlla e Invia")
-    # 4. Anteprima DINAMICA (mostra quello che scrivi nella text_area)
+    
+    # 4. ANTEPRIMA DINAMICA
     with st.container(border=True):
         st.caption("👁️ Anteprima finale (quello che riceverà il cliente)")
-        st.components.v1.html(testo_personalizzato, height=300, scrolling=True)
+        st.components.v1.html(anteprima_finale_html, height=350, scrolling=True)
 
-        # Sostituisci il blocco dei bottoni finale con questo:
-        
         st.divider()
         c1, c2 = st.columns(2)
         
         with c1:
-            # INPUT PER LA TUA MAIL DI TEST
             test_email = st.text_input("Tua mail per il test:", value="tua_mail@esempio.it")
             if st.button("🧪 INVIA TEST A ME", use_container_width=True):
                 if test_email:
                     with st.spinner("Invio test..."):
-                        # Invia il testo modificato ma alla TUA mail
+                        # Usiamo anteprima_finale_html così arriva formattata bene!
                         successo = mailer.send_mail(
                             test_email, 
                             f"[TEST] Proposta per {data['corp']['name']}", 
-                            testo_personalizzato
+                            anteprima_finale_html
                         )
                         if successo:
                             st.toast("Mail di test inviata!", icon="📩")
@@ -143,15 +151,14 @@ if st.session_state.data_found:
                     st.error("Inserisci un indirizzo per il test")
         
         with c2:
-            st.write(" ") # Allineamento estetico
             st.write(" ") 
-            # BOTTONE INVIO REALE
+            st.write(" ") 
             if st.button("🚀 INVIA AL CLIENTE", type="primary", use_container_width=True):
                 with st.spinner("Invio al DG..."):
                     successo = mailer.send_mail(
                         data['email'], 
                         f"Domanda rapida per {data['corp']['name']}", 
-                        testo_personalizzato
+                        anteprima_finale_html
                     )
                     if successo:
                         st.balloons()
