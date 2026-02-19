@@ -1,116 +1,64 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
-import requests
-import zeep
-from jinja2 import Template
+import streamlit as st
+import time
+from validator import validate_piva_vies
+from database import init_db, save_company
+from scraper import search_decision_maker
+from mailer import Mailer
 
-def generate_personalized_email(piva_info, lead_info):
-    # Carichiamo il template
-    with open("template_email.html") as f:
-        template = Template(f.read())
-    
-    # Mock dei dati estratti (qui andrebbe la logica dello scraper precedente)
-    data = {
-        "lead_name": lead_info['full_name'],
-        "company_name": piva_info['name'],
-        "industry": "Energia e Innovazione", # Dato che potresti estrarre dal sito
-        "city": piva_info['address'].split(",")[-2].strip(), # Estraiamo la città dall'indirizzo VIES
-        "pain_point": "gestione flussi digitali",
-        "unsubscribe_link": "https://tua-agency.it/opt-out"
-    }
-    
-    return template.render(data)
+st.set_page_config(page_title="Lead Gen Simulator", page_icon="🚀")
 
-# Flusso:
-# 1. Valido P.IVA -> 2. Cerco Lead su Web -> 3. Genero Email
-piva_data = validate_piva_vies("00742640154")
-if piva_data and piva_data['valid']:
-    lead_data = {"full_name": "Mario Rossi"} # Risultato dello scraping
-    email_finale = generate_personalized_email(piva_data, lead_data)
-    print("Email Pronta per l'invio!")
+st.title("🛡️ Test Simulazione Lead Generation")
+st.write("Questo test verificherà il flusso completo **senza inviare email**.")
 
-def validate_piva_vies(vat_number, country_code='IT'):
-    """
-    Verifica se la Partita IVA è valida e attiva nel database VIES.
-    """
-    url = 'https://ec.europa.eu/taxation_customs/vies/checkVatService.wsdl'
-    client = zeep.Client(wsdl=url)
-    
-    try:
-        result = client.service.checkVat(countryCode=country_code, vatNumber=vat_number)
-        if result.valid:
-            print(f"✅ Azienda Trovata: {result.name}")
-            return {
-                "valid": True,
-                "name": result.name,
-                "address": result.address.replace("\n", ", ")
-            }
+# Inizializza DB
+init_db()
+
+# Input utente
+target_name = st.text_input("Nome Azienda", "Eni S.p.A.")
+target_piva = st.text_input("Partita IVA", "00742640154")
+
+if st.button("Avvia Test Flusso"):
+    with st.status("Esecuzione flusso in corso...", expanded=True) as status:
+        
+        # 1. VALIDAZIONE
+        st.write("🔍 Controllo VIES...")
+        info = validate_piva_vies(target_piva)
+        if info and info['valid']:
+            st.success(f"Azienda trovata: {info['name']}")
+            save_company(target_piva, info['name'], info['address'])
         else:
-            print("❌ Partita IVA non valida o cessata.")
-            return {"valid": False}
-    except Exception as e:
-        print(f"⚠️ Errore durante la validazione: {e}")
-        return None
+            st.error("P.IVA non valida.")
+            st.stop()
 
-# Esempio d'uso
-# info_azienda = validate_piva_vies("00742640154") # P.IVA Eni S.p.A.
+        # 2. SCRAPING
+        st.write("🕵️ Ricerca Direttore Generale...")
+        # Simuliamo un risultato per il test se non hai ancora le API keys
+        lead = {"name": "Mario Rossi", "link": "https://linkedin.com/in/test"} 
+        st.info(f"Lead individuato: {lead['name']}")
 
-def search_decision_maker(company_name):
-    # Eseguiamo una ricerca mirata su Google via API
-    # Query: "Direttore Generale [Nome Azienda] LinkedIn"
-    api_key = "TUO_SERPAPI_KEY"
-    query = f"Direttore Generale {company_name} LinkedIn"
-    
-    params = {
-        "engine": "google",
-        "q": query,
-        "api_key": api_key
-    }
-    
-    response = requests.get("https://serpapi.com/search", params=params)
-    results = response.json().get("organic_results", [])
-    
-    if results:
-        # Il primo risultato solitamente è il profilo più rilevante
-        top_result = results[0]
-        return {
-            "name": top_result.get("title").split("-")[0].strip(),
-            "profile_url": top_result.get("link")
+        # 3. GENERAZIONE EMAIL (DRY RUN)
+        st.write("📝 Generazione template HTML...")
+        mailer = Mailer("smtp.test.com", 465, "test@test.it", "password")
+        
+        dati_per_mail = {
+            'lead_name': lead['name'],
+            'company_name': info['name'],
+            'city': info['address'].split(",")[0],
+            'industry': "Innovazione Energetica"
         }
-    return None
+        
+        try:
+            corpo_html = mailer.generate_body('email_dg.html', dati_per_mail)
+            st.write("✅ Anteprima Email generata con successo.")
+            
+            with st.expander("Visualizza Anteprima Mail"):
+                st.components.v1.html(corpo_html, height=400, scrolling=True)
+                
+            st.warning("🚫 MODO TEST: Invio email saltato intenzionalmente.")
+        except Exception as e:
+            st.error(f"Errore nel template: {e}")
 
-def get_verified_email(full_name, domain):
-    api_key = "TUA_HUNTER_API_KEY"
-    first_name, last_name = full_name.split(" ")[0], full_name.split(" ")[1]
-    
-    url = f"https://api.hunter.io/v2/email-finder?domain={domain}&first_name={first_name}&last_name={last_name}&api_key={api_key}"
-    
-    res = requests.get(url).json()
-    if res['data'] and res['data']['verification']['status'] == 'deliverable':
-        return res['data']['email']
-    return None
+        status.update(label="Test Completato!", state="complete", expanded=False)
 
-Base = declarative_base()
-
-class Company(Base):
-    __tablename__ = 'companies'
-    id = Column(Integer, primary_key=True)
-    name = Column(String, unique=True)
-    vat_number = Column(String) # P.IVA da CCIAA
-    website = Column(String)
-    industry = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-class Lead(Base):
-    __tablename__ = 'leads'
-    id = Column(Integer, primary_key=True)
-    company_id = Column(ForeignKey('companies.id'))
-    full_name = Column(String)
-    role = Column(String) # es. "Direttore Generale"
-    email = Column(String, unique=True)
-    phone = Column(String)
-    status = Column(String, default='found') # found, contacted, bounced
-    last_contacted = Column(DateTime)
-
-
+st.divider()
+st.caption("iPad Pro Project - Marketing Automation v1.0")
