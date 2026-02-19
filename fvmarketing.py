@@ -75,7 +75,7 @@ if st.session_state.data_found:
     })
     
     with st.container(border=True):
-        st.components.v1.html(corpo_html, height=300, scrolling=True)
+        st.components.v1.html(corpo_mail, height=300, scrolling=True)
 
     # Bottoni decisionali
     c1, c2 = st.columns(2)
