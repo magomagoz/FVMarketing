@@ -76,34 +76,42 @@ if st.session_state.data_found:
             st.warning("Nessun profilo social trovato.")
             data['lead'] = None
 
-    st.divider()
-    st.subheader("📧 Personalizza la Comunicazione")
-
-    # 1. Logica Bozza Pulita
-    nome_dest = data['lead']['name'] if data.get('lead') else "Direttore"
-    corpo_default = f"Gentile {nome_dest},\n\nLe scrivo perché seguo con interesse {data['corp']['name']}..."
+        st.divider()
+        
+        # 1. Recuperiamo il nome corretto
+        nome_per_mail = data['lead']['name'] if (data.get('lead') and data['lead'].get('name')) else "Direttore"
     
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = corpo_default
-
-    # 2. BOX COMPRIMIBILE (Modifica)
-    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
-        testo_chiaro = st.text_area(
-            "Contenuto mail:", 
-            value=st.session_state.bozza_editor, 
-            height=250
-        )
-        st.session_state.bozza_editor = testo_chiaro
-
-    # 3. Trasformazione HTML
-    testo_formattato = testo_chiaro.replace("\n", "<br>")
-    anteprima_html = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_formattato})
-
-    # 4. ANTEPRIMA E INVIO
-    st.subheader("✍️ Controlla e Invia")
-    with st.container(border=True):
-        st.components.v1.html(anteprima_html, height=350, scrolling=True)
-
+        # 2. Inizializziamo la bozza solo la prima volta
+        if 'bozza_editor' not in st.session_state:
+            # Qui incolla il testo completo dell'IperAmmortamento che vuoi come base
+            st.session_state.bozza_editor = f"Gentile {nome_per_mail},\n\nLe scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026..."
+    
+        st.subheader("📧 Personalizza la Comunicazione")
+    
+        # 3. BOX DI MODIFICA (Editor)
+        with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
+            testo_chiaro = st.text_area(
+                "Contenuto mail:", 
+                value=st.session_state.bozza_editor, 
+                height=300,
+                key="main_editor" # Aggiungiamo una chiave unica
+            )
+            st.session_state.bozza_editor = testo_chiaro
+    
+        # 4. ANTEPRIMA SINCRONIZZATA
+        # Trasformiamo i ritorni a capo per l'HTML
+        testo_formattato = st.session_state.bozza_editor.replace("\n", "<br>")
+        
+        # Generiamo l'anteprima usando il testo dell'editor!
+        anteprima_html = mailer.generate_body('email_dg.html', {
+            'corpo_testuale': testo_formattato
+        })
+    
+        st.subheader("✍️ Controlla e Invia")
+        with st.container(border=True):
+            st.caption("👁️ Anteprima finale (quello che scrivi sopra apparirà qui)")
+            st.components.v1.html(anteprima_html, height=400, scrolling=True)
+    
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
