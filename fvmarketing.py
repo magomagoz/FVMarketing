@@ -90,7 +90,7 @@ if st.session_state.data_found:
     st.divider()
 
     # Anteprima della Mail
-    st.subheader("📧 Anteprima Comunicazione")
+    st.subheader("📧 Personalizza la Comunicazione")
 
 if st.session_state.data_found:
     # 1. Recuperiamo i dati dalla sessione
@@ -104,7 +104,6 @@ if st.session_state.data_found:
         'industry': "Innovazione"
     })
 
-    st.subheader("✍️ Personalizza e Invia")
     
     # 3. Campo di modifica (TextArea)
     # Usiamo bozza_base come valore iniziale
@@ -114,6 +113,7 @@ if st.session_state.data_found:
         height=350
     )
 
+    st.subheader("✍️ Controlla e Invia")
     # 4. Anteprima DINAMICA (mostra quello che scrivi nella text_area)
     with st.container(border=True):
         st.caption("👁️ Anteprima finale (quello che riceverà il cliente)")
