@@ -119,21 +119,39 @@ if st.session_state.data_found:
         st.caption("👁️ Anteprima finale (quello che riceverà il cliente)")
         st.components.v1.html(testo_personalizzato, height=300, scrolling=True)
 
-    # 5. Bottone di invio
-    if st.button("🚀 INVIA MAIL PERSONALIZZATA", type="primary", use_container_width=True):
-        if not data.get('email'):
-            st.error("Manca l'indirizzo email del destinatario!")
-        else:
-            with st.spinner("Invio in corso..."):
-                # IMPORTANTE: Passiamo 'testo_personalizzato', non 'bozza_base'!
-                successo = mailer.send_mail(
-                    data['email'], 
-                    f"Domanda rapida per {data['corp']['name']}", 
-                    testo_personalizzato
-                )
-                
-                if successo:
-                    st.balloons()
-                    st.success(f"✅ Mail inviata con successo a {data['lead']['name']}!")
-                    # Opzionale: puliamo lo stato per una nuova ricerca
-                    # st.session_state.data_found = None 
+        # Sostituisci il blocco dei bottoni finale con questo:
+        
+        st.divider()
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            # INPUT PER LA TUA MAIL DI TEST
+            test_email = st.text_input("Tua mail per il test:", value="tua_mail@esempio.it")
+            if st.button("🧪 INVIA TEST A ME", use_container_width=True):
+                if test_email:
+                    with st.spinner("Invio test..."):
+                        # Invia il testo modificato ma alla TUA mail
+                        successo = mailer.send_mail(
+                            test_email, 
+                            f"[TEST] Proposta per {data['corp']['name']}", 
+                            testo_personalizzato
+                        )
+                        if successo:
+                            st.toast("Mail di test inviata!", icon="📩")
+                else:
+                    st.error("Inserisci un indirizzo per il test")
+        
+        with c2:
+            st.write(" ") # Allineamento estetico
+            st.write(" ") 
+            # BOTTONE INVIO REALE
+            if st.button("🚀 INVIA AL CLIENTE", type="primary", use_container_width=True):
+                with st.spinner("Invio al DG..."):
+                    successo = mailer.send_mail(
+                        data['email'], 
+                        f"Domanda rapida per {data['corp']['name']}", 
+                        testo_personalizzato
+                    )
+                    if successo:
+                        st.balloons()
+                        st.success(f"Inviata a {data['lead']['name']}!")
