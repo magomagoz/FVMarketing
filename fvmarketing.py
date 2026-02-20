@@ -4,77 +4,54 @@ from validator import validate_piva_vies
 from scraper import search_decision_maker, get_verified_email
 from mailer import Mailer
 
-# --- CONFIGURAZIONE ---
-# Usa st.secrets per non scrivere la password in chiaro su GitHub!
-#mailer = Mailer("smtp.gmail.com", 465, "tua_mail@gmail.com", "tua_password_app")
-
-# In fvmarketing.py (all'inizio)
-mailer = Mailer(
-    host="smtp.gmail.com", 
-    port=465, 
-    user=st.secrets["MAIL_USER"], 
-    password=st.secrets["MAIL_PASSWORD"]
-)
+# Caricamento Mailer dai Secrets
+mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
 st.image("banner.png", use_container_width=True)
 
-if 'data_found' not in st.session_state:
-    st.session_state.data_found = None
-
-# --- FASE 1: INPUT (Sidebar) ---
+# --- FASE 1: RICERCA AZIENDA (Sidebar) ---
 with st.sidebar:
-    st.header("🔍 Ricerca Avanzata")
-    company_query = st.text_input("Nome Azienda")
+    st.header("🔍 Trova Azienda")
+    query = st.text_input("Inserisci nome azienda:")
     
-    if company_query:
-        if 'last_query' not in st.session_state or st.session_state.last_query != company_query:
-            with st.spinner("Cerco aziende corrispondenti..."):
-                st.session_state.found_companies = search_company_list(company_query)
-                st.session_state.last_query = company_query
-
-        if st.session_state.found_companies:
-            st.write("Seleziona quella corretta:")
-            options = [c['display_name'] for c in st.session_state.found_companies]
-            selected_comp_name = st.radio("Risultati trovati:", options)
+    if query:
+        with st.spinner("Ricerca in corso..."):
+            aziende_trovate = search_company_list(query)
             
-            if st.button("Analizza Azienda Selezionata"):
-                # Recuperiamo l'azienda scelta
-                idx = options.index(selected_comp_name)
-                chosen = st.session_state.found_companies[idx]
-                
-                # Salviamo nello stato e procediamo allo scraping del Decision Maker
-                st.session_state.data_found = {
-                    "corp": {"name": chosen['display_name'], "address": chosen['snippet'], "valid": True},
-                    "leads": search_decision_maker(chosen['display_name']),
-                    "email": "" # Verrà cercata dopo
-                }
-                # Reset bozza per la nuova azienda
-                if 'bozza_editor' in st.session_state:
-                    del st.session_state.bozza_editor
+        if aziende_trovate:
+            st.write("Qual è quella corretta?")
+            # Mostriamo Nome + un pezzetto di snippet per la località
+            nomi_display = [f"🏢 {a['name']} ({a['location'][:30]}...)" for a in aziende_trovate]
+            scelta_idx = st.radio("Risultati:", range(len(nomi_display)), format_func=lambda x: nomi_display[x])
+            
+            if st.button("✅ ANALIZZA QUESTA"):
+                azienda_scelta = aziende_trovate[scelta_idx]
+                with st.spinner("Cerco i Decision Maker..."):
+                    leads = search_decision_maker(azienda_scelta['name'])
+                    st.session_state.data_found = {
+                        "corp": {"name": azienda_scelta['name'], "address": azienda_scelta['location']},
+                        "leads": leads,
+                        "email": "info@azienda.it" # Mock
+                    }
+                    # Reset della bozza per la nuova azienda
+                    if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
         else:
-            st.warning("Nessuna azienda trovata con questo nome.")
+            st.warning("Nessuna azienda trovata.")
 
-# --- FASE 2: ELABORAZIONE ---
-if search_button and company_input:
-    with st.spinner("Recupero informazioni in corso..."):
-        if company_input.isdigit():
-            info_corp = validate_piva_vies(company_input)
-        else:
-            info_corp = {"name": company_input.title(), "address": "Indirizzo non trovato", "valid": True}
+# --- FASE 2: VISUALIZZAZIONE E EDITOR ---
+if st.session_state.get('data_found'):
+    data = st.session_state.data_found
+    
+    # Intestazione pulita
+    st.success(f"Analisi per: **{data['corp']['name']}**")
+    
+    # Selezione del Lead (se ce ne sono più di uno)
+    opzioni_lead = [f"{l['name']} ({l['source']})" for l in data['leads']]
+    scelta_lead = st.selectbox("🎯 Destinatario individuato:", opzioni_lead)
+    lead_selezionato = data['leads'][opzioni_lead.index(scelta_lead)]
+    
+    st.divider()
 
-        if info_corp and info_corp.get('valid'):
-            # Prima ricerca veloce per inizializzare
-            leads = search_decision_maker(info_corp['name'])
-            st.session_state.data_found = {
-                "corp": info_corp,
-                "leads": leads, # Salviamo la lista completa
-                "email": "mario.rossi@azienda.it" 
-            }
-            # Reset della bozza quando cambia azienda
-            if 'bozza_editor' in st.session_state:
-                del st.session_state.bozza_editor
-        else:
-            st.error("Impossibile trovare dati validi.")
 
 # --- FASE 3: VISUALIZZAZIONE ---
 if st.session_state.data_found:
@@ -150,3 +127,39 @@ if st.session_state.data_found:
                     if mailer.send_mail(data['email'], f"Proposta per {data['corp']['name']}", anteprima_html):
                         st.balloons()
                         st.success("Inviata!")
+
+
+
+    # --- EDITOR MAIL (A tutta larghezza e sincronizzato) ---
+    nome_dest = lead_selezionato['name'] if lead_selezionato['name'] else "Direttore"
+    
+    # Carichiamo il testo base solo la prima volta
+    testo_default = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']}..."
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = testo_default
+
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
+        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=300)
+        st.session_state.bozza_editor = testo_chiaro
+
+    # Anteprima HTML
+    testo_html = testo_chiaro.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_html})
+    
+    st.subheader("✍️ Anteprima e Invio")
+    with st.container(border=True):
+        st.components.v1.html(anteprima, height=350, scrolling=True)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            test_mail = st.text_input("Tua mail per test:", value="tua@mail.it")
+            if st.button("🧪 INVIA TEST"):
+                if mailer.send_mail(test_mail, "Test IperAmmortamento", anteprima):
+                    st.toast("Test inviato!")
+        with c2:
+            st.write(" ")
+            if st.button("🚀 INVIA AL CLIENTE", type="primary"):
+                # Qui useresti la mail vera trovata dallo scraper
+                if mailer.send_mail(data['email'], f"Proposta per {data['corp']['name']}", anteprima):
+                    st.balloons()
+
