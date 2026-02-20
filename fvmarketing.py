@@ -23,9 +23,36 @@ if 'data_found' not in st.session_state:
 
 # --- FASE 1: INPUT (Sidebar) ---
 with st.sidebar:
-    st.header("Ricerca Azienda")
-    company_input = st.text_input("Nome Azienda o P.IVA")
-    search_button = st.button("Analizza Azienda")
+    st.header("🔍 Ricerca Avanzata")
+    company_query = st.text_input("Nome Azienda")
+    
+    if company_query:
+        if 'last_query' not in st.session_state or st.session_state.last_query != company_query:
+            with st.spinner("Cerco aziende corrispondenti..."):
+                st.session_state.found_companies = search_company_list(company_query)
+                st.session_state.last_query = company_query
+
+        if st.session_state.found_companies:
+            st.write("Seleziona quella corretta:")
+            options = [c['display_name'] for c in st.session_state.found_companies]
+            selected_comp_name = st.radio("Risultati trovati:", options)
+            
+            if st.button("Analizza Azienda Selezionata"):
+                # Recuperiamo l'azienda scelta
+                idx = options.index(selected_comp_name)
+                chosen = st.session_state.found_companies[idx]
+                
+                # Salviamo nello stato e procediamo allo scraping del Decision Maker
+                st.session_state.data_found = {
+                    "corp": {"name": chosen['display_name'], "address": chosen['snippet'], "valid": True},
+                    "leads": search_decision_maker(chosen['display_name']),
+                    "email": "" # Verrà cercata dopo
+                }
+                # Reset bozza per la nuova azienda
+                if 'bozza_editor' in st.session_state:
+                    del st.session_state.bozza_editor
+        else:
+            st.warning("Nessuna azienda trovata con questo nome.")
 
 # --- FASE 2: ELABORAZIONE ---
 if search_button and company_input:
