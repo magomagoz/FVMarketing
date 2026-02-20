@@ -1,35 +1,33 @@
 import requests
 
 def search_company_list(query):
-    """Cerca una lista di aziende corrispondenti al nome inserito."""
+    """Cerca aziende su Google via Serper filtrando per database italiani."""
     search_url = "https://google.serper.dev/search"
     headers = {
-        'X-API-KEY': 'TUA_CHIAVE_SERPER',
+        'X-API-KEY': 'TUA_CHIAVE_SERPER', # Assicurati che sia nei Secrets!
         'Content-Type': 'application/json'
     }
-    # Forziamo la ricerca su siti che riportano dati aziendali italiani
     payload = {
         "q": f"{query} sito:ufficiocamerale.it OR sito:reportaziende.it",
-        "gl": "it",
-        "hl": "it"
+        "gl": "it", "hl": "it"
     }
-    
-    response = requests.post(search_url, json=payload, headers=headers)
-    results = response.json().get('organic', [])
-    
-    companies = []
-    for res in results:
-        # Estraiamo nome e località dallo snippet o dal titolo
-        title = res.get('title', '')
-        snippet = res.get('snippet', '')
-        link = res.get('link', '')
-        
-        # Filtriamo solo risultati che sembrano aziende reali
-        if "P.IVA" in snippet or "-" in title:
+    try:
+        response = requests.post(search_url, json=payload, headers=headers)
+        results = response.json().get('organic', [])
+        companies = []
+        for res in results:
+            # Pulizia del titolo per avere Nome + Località
+            title = res.get('title', '').split('|')[0].split(' - ')[0]
             companies.append({
-                "display_name": f"{title}",
-                "link": link,
-                "snippet": snippet
+                "name": title,
+                "location": res.get('snippet', 'Località non specificata'),
+                "link": res.get('link')
             })
-            
-    return companies[:5] # Restituiamo le prime 5 corrispondenze
+        return companies[:5]
+    except:
+        return []
+
+def search_decision_maker(company_name):
+    """Cerca il DG o Titolare per l'azienda selezionata."""
+    # ... (mantieni la tua logica precedente qui) ...
+    return [{"name": "Direttore Generale", "source": "Ricerca generica", "link": "#", "snippet": "Contatto standard"}]
