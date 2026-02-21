@@ -128,38 +128,3 @@ if st.session_state.data_found:
                         st.balloons()
                         st.success("Inviata!")
 
-
-
-    # --- EDITOR MAIL (A tutta larghezza e sincronizzato) ---
-    nome_dest = lead_selezionato['name'] if lead_selezionato['name'] else "Direttore"
-    
-    # Carichiamo il testo base solo la prima volta
-    testo_default = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']}..."
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_default
-
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
-        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=300)
-        st.session_state.bozza_editor = testo_chiaro
-
-    # Anteprima HTML
-    testo_html = testo_chiaro.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_html})
-    
-    st.subheader("✍️ Anteprima e Invio")
-    with st.container(border=True):
-        st.components.v1.html(anteprima, height=350, scrolling=True)
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            test_mail = st.text_input("Tua mail per test:", value="tua@mail.it")
-            if st.button("🧪 INVIA TEST"):
-                if mailer.send_mail(test_mail, "Test IperAmmortamento", anteprima):
-                    st.toast("Test inviato!")
-        with c2:
-            st.write(" ")
-            if st.button("🚀 INVIA AL CLIENTE", type="primary"):
-                # Qui useresti la mail vera trovata dallo scraper
-                if mailer.send_mail(data['email'], f"Proposta per {data['corp']['name']}", anteprima):
-                    st.balloons()
-
