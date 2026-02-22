@@ -35,60 +35,75 @@ with st.sidebar:
                     if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
                 st.rerun()
 
-# --- 1. IDENTIFICAZIONE DESTINATARIO ---
+# --- 1. SCHEDA AZIENDA SOTTO IL BANNER ---
 if st.session_state.get('data_found'):
     data = st.session_state.data_found
     
-    # Recuperiamo il lead selezionato (o il primo della lista)
-    if data.get('leads'):
-        opzioni_l = [f"{l['name']}" for l in data['leads']]
-        sel_l = st.selectbox("🎯 Conferma il destinatario:", opzioni_l)
-        lead_scelto = data['leads'][opzioni_l.index(sel_l)]
-        nome_destinatario = lead_scelto['name'].split(' ')[0] # Prende solo il primo nome
-    else:
-        nome_destinatario = "Direttore"
-
-    # --- 2. SINCRONIZZAZIONE BOZZA ---
-    # Inizializziamo la bozza nell'editor con il nome CORRETTO
-    testo_base = f"Gentile {nome_destinatario},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
+    # Questo blocco visualizza P.IVA, Fatturato e Località proprio sotto il banner
+    with st.container(border=True):
+        st.markdown(f"### 📊 Analisi Aziendale: {data['corp']['name']}")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("🆔 Partita IVA", data['corp'].get('piva', 'Da verificare'))
+        with c2: st.metric("💰 Fatturato Est.", data['corp'].get('revenue', 'Non disponibile'))
+        with c3: st.metric("📍 Località", data['corp'].get('location', 'N.D.')[:30] + "...")
     
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_base
-
     st.divider()
 
-    # --- 3. EDITOR (Sorgente dati) ---
-    st.subheader("📧 Personalizza la Comunicazione")
-    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=True):
-        # L'area di testo deve leggere e scrivere sempre in session_state
+    # --- 2. SELEZIONE CONTATTO ---
+    if data.get('leads'):
+        st.subheader("👥 Decision Maker individuati")
+        opzioni_l = [f"{l['name']} ({l['source']})" for l in data['leads']]
+        
+        # Usiamo una key per mantenere la selezione fissa
+        sel_l = st.selectbox("🎯 Invia a questo contatto:", opzioni_l, key="sel_lead_finale")
+        index_lead = opzioni_l.index(sel_l)
+        lead_attuale = data['leads'][index_all]
+        
+        # Puliamo il nome per il "Gentile" (es. "Mario Rossi" -> "Mario")
+        nome_per_mail = lead_attuale['name'].split(' ')[0]
+    else:
+        st.warning("Nessun contatto trovato.")
+        nome_per_mail = "Direttore"
+
+    # --- 3. LOGICA EDITOR E NOME ---
+    # Prepariamo il testo base con il nome corretto
+    testo_base = f"Gentile {nome_per_mail},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
+    
+    # Inizializziamo l'editor solo se è vuoto o se il nome è diverso da quello selezionato
+    if 'bozza_editor' not in st.session_state or nome_per_mail not in st.session_state.bozza_editor:
+        st.session_state.bozza_editor = testo_base
+
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
         testo_chiaro = st.text_area(
-            "Contenuto mail:", 
+            "Contenuto:", 
             value=st.session_state.bozza_editor, 
-            height=300,
-            key="main_text_area"
+            height=250,
+            key="area_testo_mail"
         )
+        # Salviamo la modifica manuale in session_state
         st.session_state.bozza_editor = testo_chiaro
 
-    # --- 4. ANTEPRIMA (Riflette l'editor) ---
-    st.subheader("✍️ Controlla e Invia")
+    # --- 4. ANTEPRIMA HTML SINCRONIZZATA ---
+    st.subheader("✍️ Anteprima e Invio")
     
-    # Trasformiamo i ritorni a capo dell'editor in tag HTML per l'anteprima
-    testo_html_sincronizzato = st.session_state.bozza_editor.replace("\n", "<br>")
+    # L'anteprima deve leggere DIRETTAMENTE quello che c'è nell'editor sopra
+    testo_html = st.session_state.bozza_editor.replace("\n", "<br>")
     
-    # Generiamo l'anteprima finale usando il testo appena modificato
-    anteprima_finale = mailer.generate_body('email_dg.html', {
-        'corpo_testuale': testo_html_sincronizzato
+    anteprima = mailer.generate_body('email_dg.html', {
+        'corpo_testuale': testo_html
     })
 
     with st.container(border=True):
-        st.components.v1.html(anteprima_finale, height=400, scrolling=True)
+        st.components.v1.html(anteprima, height=350, scrolling=True)
         
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            test_m = st.text_input("Mail test:", value="tua@mail.it")
+        col1, col2 = st.columns(2)
+        with col1:
+            test_m = st.text_input("Tua mail per test:", value="tua@mail.it")
             if st.button("🧪 INVIA TEST"):
-                if mailer.send_mail(test_m, "Test", anteprima): st.toast("Inviata!")
-        with col_btn2:
+                if mailer.send_mail(test_m, f"Test Proposta {data['corp']['name']}", anteprima):
+                    st.toast("Mail di test inviata con successo!")
+        with col2:
             st.write(" ")
             if st.button("🚀 INVIA AL CLIENTE", type="primary"):
+                # Qui andrebbe l'indirizzo reale trovato dallo scraper
                 st.balloons()
