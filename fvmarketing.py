@@ -35,43 +35,53 @@ with st.sidebar:
                     if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
                 st.rerun()
 
-# --- CORPO PRINCIPALE: DATI E MAIL ---
+# --- 1. IDENTIFICAZIONE DESTINATARIO ---
 if st.session_state.get('data_found'):
     data = st.session_state.data_found
     
-    # 📊 SCHEDA AZIENDA SOTTO IL BANNER
-    with st.container(border=True):
-        st.subheader(f"Scheda Azienda: {data['corp']['name']}")
-        c1, c2, c3 = st.columns(3)
-        with c1: st.metric("📍 Località", data['corp']['location'][:30] + "...")
-        with c2: st.metric("🆔 Partita IVA", data['corp']['piva'])
-        with c3: st.metric("💰 Fatturato Est.", data['corp']['revenue'])
+    # Recuperiamo il lead selezionato (o il primo della lista)
+    if data.get('leads'):
+        opzioni_l = [f"{l['name']}" for l in data['leads']]
+        sel_l = st.selectbox("🎯 Conferma il destinatario:", opzioni_l)
+        lead_scelto = data['leads'][opzioni_l.index(sel_l)]
+        nome_destinatario = lead_scelto['name'].split(' ')[0] # Prende solo il primo nome
+    else:
+        nome_destinatario = "Direttore"
+
+    # --- 2. SINCRONIZZAZIONE BOZZA ---
+    # Inizializziamo la bozza nell'editor con il nome CORRETTO
+    testo_base = f"Gentile {nome_destinatario},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
     
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = testo_base
+
     st.divider()
 
-    # 👥 DECISION MAKER
-    st.subheader("👥 Decision Maker individuati")
-    opzioni_l = [f"{l['name']} ({l['source']})" for l in data['leads']]
-    sel_l = st.selectbox("Invia a:", opzioni_l)
-    lead_attuale = data['leads'][opzioni_l.index(sel_l)]
-
-    # 📧 EDITOR E ANTEPRIMA
-    nome_dest = lead_attuale['name'].split(' - ')[0]
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = f"Gentile {nome_dest},\n\nLe scrivo perché per {data['corp']['name']}..."
-
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
-        # Definiamo testo_chiaro qui per evitare NameError
-        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
+    # --- 3. EDITOR (Sorgente dati) ---
+    st.subheader("📧 Personalizza la Comunicazione")
+    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=True):
+        # L'area di testo deve leggere e scrivere sempre in session_state
+        testo_chiaro = st.text_area(
+            "Contenuto mail:", 
+            value=st.session_state.bozza_editor, 
+            height=300,
+            key="main_text_area"
+        )
         st.session_state.bozza_editor = testo_chiaro
 
-    # Generazione anteprima
-    testo_html = testo_chiaro.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_html})
+    # --- 4. ANTEPRIMA (Riflette l'editor) ---
+    st.subheader("✍️ Controlla e Invia")
     
-    st.subheader("✍️ Anteprima e Invio")
+    # Trasformiamo i ritorni a capo dell'editor in tag HTML per l'anteprima
+    testo_html_sincronizzato = st.session_state.bozza_editor.replace("\n", "<br>")
+    
+    # Generiamo l'anteprima finale usando il testo appena modificato
+    anteprima_finale = mailer.generate_body('email_dg.html', {
+        'corpo_testuale': testo_html_sincronizzato
+    })
+
     with st.container(border=True):
-        st.components.v1.html(anteprima, height=350, scrolling=True)
+        st.components.v1.html(anteprima_finale, height=400, scrolling=True)
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
