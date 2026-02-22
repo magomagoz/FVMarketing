@@ -8,63 +8,50 @@ mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL
 st.set_page_config(layout="wide")
 st.image("banner.png", use_container_width=True)
 
-# --- SIDEBAR: RICERCA E SELEZIONE ---
-with st.sidebar:
-    st.header("🔍 Ricerca Azienda")
-    query = st.text_input("Inserisci Nome Azienda", key="input_query")
+# ... (parti iniziali uguali) ...
+
+# --- SIDEBAR: LISTA FILTRATA ---
+if st.session_state.get('companies'):
+    st.write("### 🏢 Aziende Trovate")
+    # Mostriamo solo aziende che hanno una P.IVA valida
+    valid_companies = [c for c in st.session_state.companies if c['piva'] != "Da verificare"]
     
-    if query:
-        if 'last_query' not in st.session_state or st.session_state.last_query != query:
-            st.session_state.companies = search_company_list(query)
-            st.session_state.last_query = query
+    if valid_companies:
+        labels = [f"{c['name']} ({c['piva']})" for c in valid_companies]
+        idx = st.radio("Seleziona:", range(len(labels)), format_func=lambda x: labels[x], key="radio_clean")
+        
+        if st.button("🚀 ANALIZZA SELEZIONATA"):
+            st.session_state.data_found = {
+                "corp": valid_companies[idx],
+                "leads": search_decision_maker(valid_companies[idx]['name'])
+            }
+            if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
+            st.rerun()
+    else:
+        st.error("Nessuna azienda con P.IVA trovata. Riprova con un nome più specifico.")
 
-        if st.session_state.get('companies'):
-            st.write("Seleziona quella corretta:")
-            labels = [f"🏢 {c['name']} ({c['piva']})" for c in st.session_state.companies]
-            scelta_idx = st.radio("Risultati:", range(len(labels)), format_func=lambda x: labels[x], key="radio_sel")
-            
-            if st.button("🚀 ANALIZZA SELEZIONATA"):
-                azienda = st.session_state.companies[scelta_idx]
-                with st.spinner("Analisi referenti su Web & Social..."):
-                    # Qui search_decision_maker ora cerca su più fonti (LinkedIn, CCIAA, Facebook)
-                    leads = search_decision_maker(azienda['name'])
-                    st.session_state.data_found = {
-                        "corp": azienda,
-                        "leads": leads
-                    }
-                    # Reset bozza per nuova azienda
-                    if 'bozza_editor' in st.session_state: 
-                        del st.session_state.bozza_editor
-                st.rerun()
-
-# --- 1. SCHEDA AZIENDA SOTTO IL BANNER ---
+# --- CORPO: REFERENTI PULITI ---
 if st.session_state.get('data_found'):
     data = st.session_state.data_found
     
+    # Visualizzazione dati sotto il banner (senza rumore)
     with st.container(border=True):
-        st.markdown(f"### 📊 Analisi Aziendale: {data['corp']['name']}")
+        st.subheader(f"📊 {data['corp']['name']}")
         c1, c2, c3 = st.columns(3)
-        with c1: st.metric("🆔 Partita IVA", data['corp'].get('piva', 'Da verificare'))
-        with c2: st.metric("💰 Fatturato Est.", data['corp'].get('revenue', 'Non disponibile'))
-        with c3: st.metric("📍 Località", data['corp'].get('location', 'N.D.')[:40] + "...")
-    
+        with c1: st.metric("🆔 Partita IVA", data['corp']['piva'])
+        with c2: st.metric("💰 Fatturato Est.", data['corp']['revenue'])
+        with c3: st.metric("📍 Località", data['corp']['location'])
+
     st.divider()
 
-    # --- 2. SELEZIONE CONTATTO (Multi-Fonte) ---
-    if data.get('leads'):
-        st.subheader("👥 Referenti individuati (LinkedIn, CCIAA, Web)")
-        opzioni_l = [f"{l['name']} ({l['source']})" for l in data['leads']]
-        
-        sel_l = st.selectbox("🎯 Invia a questo contatto:", opzioni_l, key="sel_lead_finale")
-        index_lead = opzioni_l.index(sel_l)
-        lead_attuale = data['leads'][index_lead] # FIX: era index_all
-        
-        # Pulizia nome per il Gentile
-        nome_per_mail = lead_attuale['name'].split(' ')[0].replace("Profilo", "").strip()
-    else:
-        st.warning("Nessun contatto trovato.")
-        nome_per_mail = "Direttore"
-
+    # Selezione Referente (solo se utile)
+    st.subheader("👥 Referente Selezionato")
+    opzioni = [l['name'] for l in data['leads']]
+    sel = st.selectbox("Invia a:", opzioni)
+    
+    # Fix Gentile: prende solo il primo nome del referente
+    nome_pulito = sel.split()[0] if sel != "Direttore Generale" else "Direttore"
+    
     # --- 3. LOGICA EDITOR E SINCRONIZZAZIONE ---
     testo_base = f"Gentile {nome_per_mail},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
     
