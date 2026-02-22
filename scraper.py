@@ -7,7 +7,7 @@ def search_company_list(query):
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Query specifica per trovare dati fiscali e geografici
+    # Cerchiamo dati fiscali e geografici
     payload = {
         "q": f"{query} sede legale P.IVA fatturato",
         "gl": "it", "hl": "it"
@@ -19,19 +19,16 @@ def search_company_list(query):
         companies = []
         for res in results:
             snippet = res.get('snippet', '')
-            # Cerchiamo la P.IVA nel testo (11 cifre)
+            # Regex per P.IVA (11 cifre)
             piva_match = re.search(r'\b\d{11}\b', snippet)
-            piva = piva_match.group(0) if piva_match else "Non trovata"
+            # Regex per Fatturato (cerca cifre seguite da mln o euro)
+            fatt_match = re.search(r'(\d+[\.,]?\d*\s?(mln|mila|euro|€))', snippet, re.IGNORECASE)
             
-            # Cerchiamo di intercettare il fatturato (es: "fatturato di 10 mln")
-            fatturato_match = re.search(r'(fatturato|ricavi)[:\s]+([\d.,]+\s?(mln|mila|euro|€))', snippet, re.IGNORECASE)
-            fatturato = fatturato_match.group(2) if fatturato_match else "Dato non pubblico"
-
             companies.append({
                 "name": res.get('title', '').split(' - ')[0].split(' | ')[0],
-                "location": snippet[:120] + "...",
-                "piva": piva,
-                "revenue": fatturato,
+                "location": snippet[:100],
+                "piva": piva_match.group(0) if piva_match else "Verificare",
+                "revenue": fatt_match.group(0) if fatt_match else "Dato non visibile",
                 "link": res.get('link')
             })
         return companies
@@ -39,31 +36,18 @@ def search_company_list(query):
         return []
 
 def search_decision_maker(company_name):
-    """Cerca attivamente profili LinkedIn e Social."""
+    """Cerca attivamente su LinkedIn."""
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Cerchiamo specificamente su LinkedIn e pagine "Chi Siamo"
     payload = {
-        "q": f"site:linkedin.com/in/ \"{company_name}\" (titolare OR direttore OR CEO OR owner)",
+        "q": f"site:linkedin.com/in/ \"{company_name}\" (titolare OR direttore OR CEO)",
         "gl": "it", "hl": "it"
     }
-    
     try:
         response = requests.post(search_url, json=payload, headers=headers)
         results = response.json().get('organic', [])
-        leads = []
-        for res in results:
-            leads.append({
-                "name": res.get('title', '').split(' - ')[0].split(' | ')[0],
-                "source": "LinkedIn",
-                "link": res.get('link'),
-                "snippet": res.get('snippet')
-            })
-        # Se non trova nessuno su LinkedIn, aggiungiamo un placeholder generico
-        if not leads:
-            leads.append({"name": "Direttore Generale", "source": "Ricerca Generica", "link": "#", "snippet": "Nessun profilo social diretto trovato."})
-        return leads
+        return [{"name": r['title'].split(' - ')[0], "source": "LinkedIn", "link": r['link'], "snippet": r['snippet']} for r in results] if results else []
     except:
-        return [{"name": "Direttore Generale", "source": "Errore ricerca", "link": "#", "snippet": ""}]
+        return []
