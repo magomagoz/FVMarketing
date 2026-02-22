@@ -5,8 +5,12 @@ from mailer import Mailer
 # Configurazione Mailer (usa st.secrets!)
 mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
-st.set_page_config(layout="wide") # Forza l'uso di tutto lo schermo dell'iPad
+st.set_page_config(layout="wide", page_title="AI Business Leads")
 st.image("banner.png", use_container_width=True)
+
+# Inizializza i segreti
+if "SERPER_API_KEY" not in st.secrets:
+    st.error("⚠️ Configura SERPER_API_KEY nei Secrets di Streamlit!")
 
 # --- SIDEBAR ---
 with st.sidebar:
