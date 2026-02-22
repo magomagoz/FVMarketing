@@ -30,6 +30,9 @@ with st.sidebar:
                     if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
                 st.rerun()
 
+        else:
+            st.warning("Nessuna azienda trovata con P.IVA. Prova a cambiare nome.") # <--- Aggiungi questo
+
 # --- MAIN ---
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
