@@ -12,6 +12,25 @@ st.image("banner.png", use_container_width=True)
 if "SERPER_API_KEY" not in st.secrets:
     st.error("⚠️ Configura SERPER_API_KEY nei Secrets di Streamlit!")
 
+# --- Sotto lo st.image("banner.png") ---
+
+if st.session_state.get('data_found'):
+    data = st.session_state.data_found
+    
+    # BOX DATI ECONOMICI (Sotto il banner)
+    with st.container(border=True):
+        st.markdown(f"### 🏢 {data['corp']['name']}")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("📍 Località", data['corp']['city'])
+        with c2:
+            st.metric("🆔 Partita IVA", data['corp']['piva'])
+        with c3:
+            st.metric("💰 Fatturato", data['corp']['revenue'])
+        st.caption(f"ℹ️ *Dati estratti da: {data['corp']['address'][:100]}...*")
+
+    st.divider()
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("🔍 Ricerca Azienda")
