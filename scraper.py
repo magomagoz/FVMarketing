@@ -1,35 +1,46 @@
 import requests
+import streamlit as st
 
 def search_company_list(query):
-    """Cerca una lista di aziende potenziali con località."""
+    """Cerca aziende in modo elastico su Google via Serper."""
     search_url = "https://google.serper.dev/search"
+    
+    # Recupera la chiave dai Secrets (Assicurati che si chiami SERPER_API_KEY)
+    api_key = st.secrets.get("SERPER_API_KEY")
+    if not api_key:
+        st.error("Manca la SERPER_API_KEY nei Secrets!")
+        return []
+
     headers = {
-        'X-API-KEY': 'TUA_CHIAVE_SERPER', # Inseriscila nei Secrets
+        'X-API-KEY': api_key,
         'Content-Type': 'application/json'
     }
-    # Cerchiamo su database aziendali italiani per avere la località
+    
+    # Query più ampia per non mancare i risultati
     payload = {
-        "q": f"{query} sito:ufficiocamerale.it OR sito:reportaziende.it",
-        "gl": "it", "hl": "it"
+        "q": f"{query} azienda sede legale P.IVA",
+        "gl": "it", 
+        "hl": "it",
+        "num": 8
     }
+    
     try:
         response = requests.post(search_url, json=payload, headers=headers)
         results = response.json().get('organic', [])
+        
         companies = []
         for res in results:
-            title = res.get('title', '').split('|')[0].split(' - ')[0]
-            # Estraiamo la località dallo snippet
+            # Puliamo il titolo per identificare meglio l'azienda e la città
+            title = res.get('title', '')
+            snippet = res.get('snippet', '')
+            
+            # Aggiungiamo solo se sembra un risultato aziendale pertinente
             companies.append({
-                "name": title,
-                "info": res.get('snippet', 'Località non trovata'),
+                "name": title.split(' - ')[0].split(' | ')[0],
+                "location": snippet,
                 "link": res.get('link')
             })
-        return companies[:5]
+        return companies
     except Exception as e:
-        print(f"Errore ricerca: {e}")
+        st.error(f"Errore tecnico Serper: {e}")
         return []
-
-def search_decision_maker(company_name):
-    """Cerca i Decision Maker per l'azienda scelta."""
-    # Tua logica di ricerca LinkedIn/Google
-    return [{"name": "Direttore Generale", "source": "LinkedIn", "link": "#", "snippet": "Profilo trovato"}]
