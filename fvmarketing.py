@@ -18,30 +18,31 @@ with st.sidebar:
             st.session_state.companies = search_company_list(query)
             st.session_state.last_query = query
 
+# ... (Parti iniziali del tuo codice) ...
+
+# --- SIDEBAR: SELEZIONE AZIENDA ---
 if st.session_state.get('companies'):
-    st.write("### 🏢 Aziende Trovate")
-    # Mostriamo solo aziende che hanno una P.IVA valida
-    valid_companies = [c for c in st.session_state.companies if c['piva'] != "Da verificare"]
+    st.write("### 🏢 Aziende con P.IVA trovate")
+    # Filtriamo ulteriormente in interfaccia per sicurezza
+    labels = [f"{c['name']} ({c['piva']})" for c in st.session_state.companies]
+    scelta_idx = st.radio("Seleziona quella corretta:", range(len(labels)), format_func=lambda x: labels[x], key="radio_final_clean")
     
-    if valid_companies:
-        labels = [f"{c['name']} ({c['piva']})" for c in valid_companies]
-        idx = st.radio("Seleziona:", range(len(labels)), format_func=lambda x: labels[x], key="radio_clean")
-        
-        if st.button("🚀 ANALIZZA SELEZIONATA"):
+    if st.button("🚀 ANALIZZA SELEZIONATA"):
+        azienda_scelta = st.session_state.companies[scelta_idx]
+        with st.spinner("Cercando i referenti..."):
+            referenti = search_decision_maker(azienda_scelta['name'])
             st.session_state.data_found = {
-                "corp": valid_companies[idx],
-                "leads": search_decision_maker(valid_companies[idx]['name'])
+                "corp": azienda_scelta,
+                "leads": referenti
             }
             if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
-            st.rerun()
-    else:
-        st.error("Nessuna azienda con P.IVA trovata. Riprova con un nome più specifico.")
+        st.rerun()
 
-# --- CORPO: REFERENTI PULITI ---
+# --- CORPO: DATI E MAIL ---
 if st.session_state.get('data_found'):
     data = st.session_state.data_found
     
-    # Visualizzazione dati sotto il banner (senza rumore)
+    # Visualizzazione Dati (Box eleganti sotto il banner)
     with st.container(border=True):
         st.subheader(f"📊 {data['corp']['name']}")
         c1, c2, c3 = st.columns(3)
@@ -51,13 +52,16 @@ if st.session_state.get('data_found'):
 
     st.divider()
 
-    # Selezione Referente (solo se utile)
-    st.subheader("👥 Referente Selezionato")
-    opzioni = [l['name'] for l in data['leads']]
-    sel = st.selectbox("Invia a:", opzioni)
+    # Selezione Referente Umano
+    st.subheader("👥 Referente per la comunicazione")
+    opzioni_leads = [f"{l['name']} [{l['source']}]" for l in data['leads']]
+    sel_lead = st.selectbox("🎯 Destinatario:", opzioni_leads, key="sb_final_leads")
     
-    # Fix Gentile: prende solo il primo nome del referente
-    nome_pulito = sel.split()[0] if sel != "Direttore Generale" else "Direttore"
+    lead_attuale = data['leads'][opzioni_leads.index(sel_lead)]
+    # Il nome per la mail sarà il primo nome (es: "Giulia") o "Direttore"
+    nome_per_mail = lead_attuale['name'].split(' ')[0] if lead_attuale['name'] != "Direttore Generale" else "Direttore"
+
+    # Editor e Anteprima... (Sincronizzati come nel codice precedente)
     
     # --- 3. LOGICA EDITOR E SINCRONIZZAZIONE ---
     testo_base = f"Gentile {nome_per_mail},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
