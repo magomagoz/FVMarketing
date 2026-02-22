@@ -8,9 +8,16 @@ mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL
 st.set_page_config(layout="wide")
 st.image("banner.png", use_container_width=True)
 
-# ... (parti iniziali uguali) ...
+# --- SIDEBAR: RICERCA E SELEZIONE ---
+with st.sidebar:
+    st.header("🔍 Ricerca Azienda")
+    query = st.text_input("Inserisci Nome Azienda", key="input_query")
+    
+    if query:
+        if 'last_query' not in st.session_state or st.session_state.last_query != query:
+            st.session_state.companies = search_company_list(query)
+            st.session_state.last_query = query
 
-# --- SIDEBAR: LISTA FILTRATA ---
 if st.session_state.get('companies'):
     st.write("### 🏢 Aziende Trovate")
     # Mostriamo solo aziende che hanno una P.IVA valida
