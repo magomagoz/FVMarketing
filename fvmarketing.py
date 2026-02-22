@@ -56,7 +56,35 @@ if st.session_state.get('data_found'):
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
     # EDITOR (Correzione NameError)
-    testo_base = f"Gentile {nome_gentile},\n\nLe scrivo per {df['corp']['name']}..."
+    testo_base = f"Gentile {nome_gentile},\n\nLe scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.\n\n
+
+    In allegato troverà una simulazione di impianto fotovoltaico con il ROI che le agevolazioni permettono: potrà vedere come l'investimento si ripaga immediatamente, grazie al risparmio energetico e all'IperAmmortamento 2026.\n\n
+
+    Vorrei avere l'opportunità di analizzare i suoi consumi per proporle, senza nessun impegno, il corretto Ritorno sull'Investimento.\n\n
+
+    Non esiti nel contattarmi per ogni delucidazione in merito.\n\n
+    
+    Un cordiale saluto.\n\n
+    
+    Enrico Magostini\n\n
+    Consulente Energetico\n\n
+
+    SUN ECO POWER S.r.l.\n\n
+    Mobile:    +39 334 607 9956\n\n 
+    e-mail:    e.magostini@sunecopower.it\n\n  
+    P.IVA/C.F:01870010855\n\n
+    REA: CL-104471\n\n
+ 
+    www.sunecopower.it\n\n
+ 
+    Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere <br> 
+    riservati e sono, comunque, destinati esclusivamente alle persone o alla Società sopraindicati.<br>
+    La diffusione, distribuzione e/o copiatura del documento trasmesso da parte di qualsiasi <br> 
+    soggetto diverso dal destinatario è proibita, sia ai sensi dell'art. 616 c.p., sia ai sensi<br>
+    del D. Lgs. n. 196/2003. Se avete ricevuto questo messaggio per errore, vi preghiamo di<br>
+    distruggerlo e di informarci immediatamente inviando un messaggio all'indirizzo e-mail:<br> 
+    info@sunecopower.it\n\n"
+    
     if 'bozza_editor' not in st.session_state or nome_gentile not in st.session_state.bozza_editor:
         st.session_state.bozza_editor = testo_base
 
