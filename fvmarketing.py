@@ -2,89 +2,74 @@ import streamlit as st
 from scraper import search_company_list, search_decision_maker
 from mailer import Mailer
 
-# Configurazione Mailer (usa st.secrets!)
+# Configurazione Mailer
 mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
-st.set_page_config(layout="wide", page_title="AI Business Leads")
+st.set_page_config(layout="wide")
 st.image("banner.png", use_container_width=True)
 
-# Inizializza i segreti
-if "SERPER_API_KEY" not in st.secrets:
-    st.error("⚠️ Configura SERPER_API_KEY nei Secrets di Streamlit!")
-
-# --- Sotto lo st.image("banner.png") ---
-
-if st.session_state.get('data_found'):
-    data = st.session_state.data_found
-    
-    # BOX DATI ECONOMICI (Sotto il banner)
-    with st.container(border=True):
-        st.markdown(f"### 🏢 {data['corp']['name']}")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("📍 Località", data['corp']['city'])
-        with c2:
-            st.metric("🆔 Partita IVA", data['corp']['piva'])
-        with c3:
-            st.metric("💰 Fatturato", data['corp']['revenue'])
-        st.caption(f"ℹ️ *Dati estratti da: {data['corp']['address'][:100]}...*")
-
-    st.divider()
-
-# --- SIDEBAR ---
+# --- LOGICA DI SELEZIONE NELLA SIDEBAR ---
 with st.sidebar:
     st.header("🔍 Ricerca Azienda")
-    query = st.text_input("Inserisci Nome Azienda", placeholder="Es: Ibm, Eni, Grafibox...")
+    query = st.text_input("Inserisci Nome Azienda", key="search_input")
     
     if query:
-        with st.spinner(f"Ricerca di '{query}' in corso..."):
-            aziende = search_company_list(query)
-        
-        if aziende:
-            st.success(f"Trovate {len(aziende)} corrispondenze:")
-            # Creiamo etichette che mostrano il nome e l'inizio della descrizione (per la città)
-            labels = [f"🏢 {a['name']}\n{a['location'][:50]}..." for a in aziende]
-            scelta_idx = st.radio("Seleziona quella corretta:", range(len(labels)), format_func=lambda x: labels[x])
+        # Usiamo cache per non ricaricare la lista a ogni click
+        if 'last_query' not in st.session_state or st.session_state.last_query != query:
+            st.session_state.companies = search_company_list(query)
+            st.session_state.last_query = query
+
+        if st.session_state.companies:
+            st.write("Seleziona quella corretta:")
+            labels = [f"🏢 {c['name']} ({c['piva']})" for c in st.session_state.companies]
             
-            if st.button("✅ CONFERMA SELEZIONE"):
-                # Salviamo l'azienda scelta e resettiamo lo stato per procedere
-                st.session_state.data_found = {
-                    "corp": {"name": aziende[scelta_idx]['name'], "address": aziende[scelta_idx]['location']},
-                    "leads": search_decision_maker(aziende[scelta_idx]['name']),
-                    "email": "" 
-                }
-                if 'bozza_editor' in st.session_state:
-                    del st.session_state.bozza_editor
-                st.rerun()
-        else:
-            st.warning("🧐 Nessun risultato trovato. Prova a scrivere il nome completo (es. 'IBM Italia').")
-            if st.button("Riprova ricerca"):
-                st.rerun()
+            # KEY IMPORTANTE: permette di cambiare selezione senza resettare
+            scelta = st.radio("Risultati:", range(len(labels)), format_func=lambda x: labels[x], key="company_radio")
+            
+            if st.button("🚀 ANALIZZA SELEZIONATA"):
+                azienda = st.session_state.companies[scelta]
+                with st.spinner("Cercando i Decision Maker..."):
+                    leads = search_decision_maker(azienda['name'])
+                    st.session_state.data_found = {
+                        "corp": azienda,
+                        "leads": leads,
+                        "email": "info@azienda.it"
+                    }
+                    if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
+                    st.rerun()
 
-
-# --- CORPO PRINCIPALE: EDITOR E ANTEPRIMA ---
+# --- VISUALIZZAZIONE DATI SOTTO IL BANNER ---
 if st.session_state.get('data_found'):
     data = st.session_state.data_found
     
-    # 1. Scelta del Lead
-    st.subheader(f"🎯 Destinatario per {data['corp']['name']}")
-    nomi_lead = [f"{l['name']} ({l['source']})" for l in data['leads']]
-    scelta_l = st.selectbox("Seleziona la persona:", nomi_lead)
-    lead_sel = data['leads'][nomi_lead.index(scelta_l)]
-    
+    # Cruscotto Dati Aziendali
+    with st.container(border=True):
+        st.subheader(f"📊 Scheda Azienda: {data['corp']['name']}")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("🆔 Partita IVA", data['corp']['piva'])
+        with c2: st.metric("💰 Fatturato Est.", data['corp']['revenue'])
+        with c3: st.metric("📍 Località", data['corp']['location'][:25] + "...")
+
     st.divider()
 
-    # 2. Logica Nome nel Gentile
-    nome_dest = lead_sel['name'] if lead_sel['name'] else "Direttore"
-    
-    # Inizializziamo il testo se non esiste
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
+    # --- RICERCA PERSONE E MAIL ---
+    if data['leads']:
+        st.subheader("👥 Decision Maker individuati su LinkedIn")
+        opzioni_l = [f"{l['name']}" for l in data['leads']]
+        sel_l = st.selectbox("Invia a:", opzioni_l)
+        lead_attuale = data['leads'][opzioni_l.index(sel_l)]
+    else:
+        st.warning("Nessun profilo LinkedIn trovato.")
+        lead_attuale = {"name": "Direttore", "snippet": ""}
 
-    # 3. Editor (A tutta larghezza)
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
-        testo_chiaro = st.text_area("Testo:", value=st.session_state.bozza_editor, height=300)
-        st.session_state.bozza_editor = testo_chiaro
+    # LOGICA EDITOR (A tutta larghezza)
+    nome_dest = lead_attuale['name'].split(' - ')[0]
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = f"Gentile {nome_dest},\n\nLe scrivo perché per {data['corp']['name']}..."
+
+    with st.expander("📝 MODIFICA MAIL", expanded=True):
+        testo = st.text_area("Testo:", value=st.session_state.bozza_editor, height=250)
+        st.session_state.bozza_editor = testo
 
     # 4. Anteprima Sincronizzata
     testo_html = testo_chiaro.replace("\n", "<br>")
