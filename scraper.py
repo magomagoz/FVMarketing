@@ -3,13 +3,13 @@ import streamlit as st
 import re
 
 def search_company_list(query):
+    """Cerca aziende e tenta di estrarre P.IVA e Fatturato dallo snippet."""
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Cerchiamo dati fiscali e geografici
     payload = {
-        "q": f"{query} sede legale P.IVA fatturato",
+        "q": f"{query} sede legale P.IVA fatturato sito:reportaziende.it OR sito:ufficiocamerale.it",
         "gl": "it", "hl": "it"
     }
     
@@ -27,8 +27,8 @@ def search_company_list(query):
             companies.append({
                 "name": res.get('title', '').split(' - ')[0].split(' | ')[0],
                 "location": snippet[:100],
-                "piva": piva_match.group(0) if piva_match else "Verificare",
-                "revenue": fatt_match.group(0) if fatt_match else "Dato non visibile",
+                "piva": piva_match.group(0) if piva_match else "Da verificare",
+                "revenue": fatt_match.group(0) if fatt_match else "Non pubblico",
                 "link": res.get('link')
             })
         return companies
@@ -36,7 +36,7 @@ def search_company_list(query):
         return []
 
 def search_decision_maker(company_name):
-    """Cerca attivamente su LinkedIn."""
+    """Cerca i Decision Maker su LinkedIn."""
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
@@ -48,6 +48,8 @@ def search_decision_maker(company_name):
     try:
         response = requests.post(search_url, json=payload, headers=headers)
         results = response.json().get('organic', [])
-        return [{"name": r['title'].split(' - ')[0], "source": "LinkedIn", "link": r['link'], "snippet": r['snippet']} for r in results] if results else []
+        if not results:
+            return [{"name": "Direttore Generale", "source": "Generico", "link": "#", "snippet": "Nessun profilo social trovato."}]
+        return [{"name": r['title'].split(' - ')[0], "source": "LinkedIn", "link": r['link'], "snippet": r['snippet']} for r in results]
     except:
-        return []
+        return [{"name": "Direttore Generale", "source": "Generico", "link": "#", "snippet": ""}]
