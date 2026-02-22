@@ -8,33 +8,36 @@ mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL
 st.set_page_config(layout="wide") # Forza l'uso di tutto lo schermo dell'iPad
 st.image("banner.png", use_container_width=True)
 
-# --- SIDEBAR: RICERCA E SELEZIONE ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("🔍 Ricerca Azienda")
-    query = st.text_input("Inserisci Nome Azienda")
+    query = st.text_input("Inserisci Nome Azienda", placeholder="Es: Ibm, Eni, Grafibox...")
     
     if query:
-        with st.spinner("Cerco corrispondenze..."):
+        with st.spinner(f"Ricerca di '{query}' in corso..."):
             aziende = search_company_list(query)
         
         if aziende:
-            st.write("Seleziona quella corretta:")
-            # Creiamo etichette chiare con Nome e Località
-            labels = [f"🏢 {a['name']} \n ({a['info'][:40]}...)" for a in aziende]
-            scelta_idx = st.radio("Risultati trovati:", range(len(labels)), format_func=lambda x: labels[x])
+            st.success(f"Trovate {len(aziende)} corrispondenze:")
+            # Creiamo etichette che mostrano il nome e l'inizio della descrizione (per la città)
+            labels = [f"🏢 {a['name']}\n{a['location'][:50]}..." for a in aziende]
+            scelta_idx = st.radio("Seleziona quella corretta:", range(len(labels)), format_func=lambda x: labels[x])
             
-            if st.button("✅ ANALIZZA SELEZIONATA"):
-                azienda_scelta = aziende[scelta_idx]
-                with st.spinner("Analisi in corso..."):
-                    leads = search_decision_maker(azienda_scelta['name'])
-                    st.session_state.data_found = {
-                        "corp": {"name": azienda_scelta['name'], "address": azienda_scelta['info']},
-                        "leads": leads,
-                        "email": "info@azienda.it" # Mock per ora
-                    }
-                    if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
+            if st.button("✅ CONFERMA SELEZIONE"):
+                # Salviamo l'azienda scelta e resettiamo lo stato per procedere
+                st.session_state.data_found = {
+                    "corp": {"name": aziende[scelta_idx]['name'], "address": aziende[scelta_idx]['location']},
+                    "leads": search_decision_maker(aziende[scelta_idx]['name']),
+                    "email": "" 
+                }
+                if 'bozza_editor' in st.session_state:
+                    del st.session_state.bozza_editor
+                st.rerun()
         else:
-            st.warning("Nessun risultato.")
+            st.warning("🧐 Nessun risultato trovato. Prova a scrivere il nome completo (es. 'IBM Italia').")
+            if st.button("Riprova ricerca"):
+                st.rerun()
+
 
 # --- CORPO PRINCIPALE: EDITOR E ANTEPRIMA ---
 if st.session_state.get('data_found'):
