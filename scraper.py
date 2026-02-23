@@ -1,71 +1,25 @@
 import requests
-import streamlit as st
-import re
 
-def search_company_list(query):
-    search_url = "https://google.serper.dev/search"
-    api_key = st.secrets.get("SERPER_API_KEY")
-    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+def search_decision_maker(company_name):
+    # Eseguiamo una ricerca mirata su Google via API
+    # Query: "Direttore Generale [Nome Azienda] LinkedIn"
+    api_key = "TUO_SERPAPI_KEY"
+    query = f"Direttore Generale {company_name} LinkedIn"
     
-    payload = {
-        "q": f"{query} sede legale città fatturato sito:reportaziende.it OR sito:ufficiocamerale.it",
-        "gl": "it", "hl": "it"
+    params = {
+        "engine": "google",
+        "q": query,
+        "api_key": api_key
     }
     
-    try:
-        response = requests.post(search_url, json=payload, headers=headers)
-        results = response.json().get('organic', [])
-        companies = []
-        for res in results:
-            snippet = res.get('snippet', '')
-            title = res.get('title', '')
-            piva_match = re.search(r'\b\d{11}\b', f"{title} {snippet}")
-            if piva_match:
-                rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
-                
-                # Pulizia città per evitare "LEGALE Me..." visto negli screenshot
-                citta_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', snippet)
-                citta = citta_match.group(1) if citta_match else "Da verificare"
-                if "LEGALE" in citta.upper(): citta = "Verifica Sede"
-
-                companies.append({
-                    "name": title.split(' - ')[0].split('|')[0].strip().upper(),
-                    "piva": piva_match.group(0),
-                    "location": citta,
-                    "revenue": rev_match.group(0) if rev_match else "Dato non disp."
-                })
-        return companies
-    except: return []
-
-def search_linkedin_leads(company_name):
-    search_url = "https://google.serper.dev/search"
-    api_key = st.secrets.get("SERPER_API_KEY")
-    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    response = requests.get("https://serpapi.com/search", params=params)
+    results = response.json().get("organic_results", [])
     
-    # Scansione profonda (num: 50) per trovare Monica Diaz e i vertici di Grafibox
-    query = f"site:linkedin.com/in/ \"{company_name}\" (Amministratore OR Titolare OR CEO OR Owner OR Monica Diaz OR Direttore)"
-    
-    try:
-        payload = {"q": query, "gl": "it", "hl": "it", "num": 50}
-        res = requests.post(search_url, json=payload, headers=headers).json().get('organic', [])
-        leads = []
-        domain = company_name.split()[0].lower().replace(",", "")
-        
-        for r in res:
-            title = r.get('title', '')
-            # Pulizia nome (es. "Monica Diaz - Amministratore..." -> "Monica Diaz")
-            nome = title.split(' - ')[0].split('|')[0].replace("Profilo ", "").replace("LinkedIn", "").strip()
-            
-            if 1 < len(nome.split()) < 4:
-                # Priorità ai ruoli decisionali
-                is_boss = any(x in title.lower() for x in ["amm", "titolare", "ceo", "owner", "monica", "diret"])
-                leads.append({
-                    "name": nome,
-                    "rank": 1 if is_boss else 2,
-                    "role": "Decision Maker" if is_boss else "LinkedIn Profile",
-                    "emails": [f"info@{domain}.it", f"direzione@{domain}.it", "e.magostini@sunecopower.it"]
-                })
-        
-        leads.sort(key=lambda x: x['rank'])
-        return leads if leads else [{"name": "Direttore Generale", "rank": 3, "role": "Ufficio Direzione", "emails": [f"info@{domain}.it"]}]
-    except: return []
+    if results:
+        # Il primo risultato solitamente è il profilo più rilevante
+        top_result = results[0]
+        return {
+            "name": top_result.get("title").split("-")[0].strip(),
+            "profile_url": top_result.get("link")
+        }
+    return None
