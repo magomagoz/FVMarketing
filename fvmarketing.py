@@ -56,13 +56,16 @@ if st.session_state.get('data_found'):
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Sede Legale", df['corp']['location'])
 
-    # REFERENTI
     st.subheader("👥 Referente per la comunicazione")
     nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
-    sel_lead = st.selectbox("🎯 Destinatario:", nomi_leads)
-    
-    lead_scelto = df['leads'][nomi_leads.index(sel_lead)]
+    sel_lead_idx = nomi_leads.index(st.selectbox("🎯 Destinatario:", nomi_leads))
+    lead_scelto = df['leads'][sel_lead_idx]
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
+
+    # MOSTRA LE EMAIL TROVATE
+    st.write("📧 **Email individuate:**")
+    for mail in lead_scelto['emails']:
+        st.code(mail) # Il formato code permette di copiarle con un click
 
         # Stringa corretta con triple virgolette per evitare errori
     testo_base = f"""Gentile {nome_gentile},
