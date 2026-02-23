@@ -27,25 +27,23 @@ with st.sidebar:
                 st.rerun()
 
 # --- MAIN ---
+
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
-    # 1. Visualizzazione Dati Azienda
+    # Dashboard Azienda
     with st.container(border=True):
-        st.subheader(f"📊 {df['corp']['name']}")
+        st.subheader(f"🏢 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
 
-    # 2. Selezione Referente
-    st.subheader("👥 Referenti individuati")
-    nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
-    
-    # Risoluzione NameError: definiamo lead_scelto subito
-    sel_lead_idx = nomi_leads.index(st.selectbox("🎯 Invia a questo contatto:", nomi_leads))
-    lead_scelto = df['leads'][sel_lead_idx]
-    
+    st.subheader("👥 Contatti individuati (Priorità Titolari)")
+    # Mostriamo nella selectbox anche se è un profilo LinkedIn o FB
+    nomi_leads = [f"{l['name']} [{l['source']}]" for l in df['leads']]
+    sel_box = st.selectbox("🎯 Seleziona il destinatario della mail:", nomi_leads)
+    lead_scelto = df['leads'][nomi_leads.index(sel_box)]    
     nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
     # 3. Gestione Email
