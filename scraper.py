@@ -1,71 +1,77 @@
 import requests
-import streamlit as st
 import re
 
-def search_company_list(query):
-    search_url = "https://google.serper.dev/search"
-    api_key = st.secrets.get("SERPER_API_KEY")
-    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
-    
-    # Query più ampia per beccare la sede legale subito
-    payload = {
-        "q": f"{query} sede legale città fatturato sito:reportaziende.it OR sito:ufficiocamerale.it OR sito:paginegialle.it",
-        "gl": "it", "hl": "it"
-    }
-    
-    try:
-        response = requests.post(search_url, json=payload, headers=headers)
-        results = response.json().get('organic', [])
-        companies = []
-        
-        for res in results:
-            snippet = res.get('snippet', '')
-            title = res.get('title', '')
-            full_text = f"{title} {snippet}"
-
-            piva_match = re.search(r'\b\d{11}\b', full_text)
-            if piva_match:
-                # ESTRAZIONE CITTÀ (Migliorata)
-                # Cerca pattern: "Comune (PR)", "CAP Comune", "Sede a Comune"
-                citta_match = re.search(r'(?:sede|base|in)\s+(?:a|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', full_text, re.IGNORECASE)
-                if not citta_match:
-                    citta_match = re.search(r'\b\d{5}\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', full_text)
-                
-                citta = citta_match.group(1) if citta_match else "Da verificare"
-
-                companies.append({
-                    "name": title.split(' - ')[0].split('|')[0].strip().upper(),
-                    "piva": piva_match.group(0),
-                    "location": citta.split('(')[0].strip(), # Puliamo eventuali parentesi
-                    "revenue": re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE).group(0) if re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE) else "Dato non disp."
-                })
-        return companies
-    except: return []
+# Chiavi API (da inserire in un file .env per sicurezza)
+SERPER_API_KEY = "TUA_SERPER_API_KEY"
+HUNTER_API_KEY = "TUA_HUNTER_API_KEY"
 
 def search_decision_maker(company_name):
-    search_url = "https://google.serper.dev/search"
-    api_key = st.secrets.get("SERPER_API_KEY")
-    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    """
+    Cerca il Direttore Generale su Google usando Serper.dev
+    """
+    url = "https://google.serper.dev/search"
+    query = f'"{company_name}" (Direttore Generale OR "CEO" OR "General Manager") LinkedIn'
     
-    # Query mirata per trovare Monica Diaz e i vertici (LinkedIn + Facebook)
-    queries = [
-        f"site:linkedin.com/in/ \"{company_name}\" (Titolare OR Amministratore OR Monica Diaz)",
-        f"site:facebook.com \"{company_name}\" (Titolare OR Proprietario)"
-    ]
+    payload = {"q": query}
+    headers = {
+        'X-API-KEY': SERPER_API_KEY,
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        results = response.json().get('organic', [])
+        
+        if results:
+            # Analizziamo il primo risultato utile
+            first_result = results[0]
+            title = first_result.get('title', '')
+            
+            # Pulizia del nome: spesso il titolo è "Mario Rossi - Direttore Generale - Azienda"
+            # Usiamo una regex semplice o split
+            nome_estratto = title.split('-')[0].split('|')[0].strip()
+            
+            print(f"🎯 Trovato potenziale Lead: {nome_estratto}")
+            return {
+                "name": nome_estratto,
+                "link": first_result.get('link')
+            }
+    except Exception as e:
+        print(f"⚠️ Errore durante la ricerca Google: {e}")
     
-    leads = []
-    for q in queries:
-        try:
-            res = requests.post(search_url, json={"q": q, "gl": "it", "hl": "it"}, headers=headers).json().get('organic', [])
-            for r in res:
-                nome = r.get('title', '').split(' - ')[0].split('|')[0].replace("Profilo ", "").replace(" | Facebook", "").strip()
-                if len(nome.split()) < 5 and not any(x['name'] == nome for x in leads):
-                    domain = company_name.replace(" ", "").lower()
-                    leads.append({
-                        "name": nome,
-                        "source": "LinkedIn" if "linkedin" in r.get('link', '') else "Facebook",
-                        "emails": [f"info@{domain}.it", f"direzione@{domain}.it"]
-                    })
-        except: continue
+    return None
+
+def get_verified_email(full_name, company_domain):
+    """
+    Trova e verifica l'email usando l'API di Hunter.io
+    """
+    # Pulizia nome per l'API
+    parts = full_name.split()
+    if len(parts) < 2:
+        return None
     
-    return leads if leads else [{"name": "Direttore Generale", "source": "Generico", "emails": [f"info@{company_name.replace(' ','').lower()}.it"]}]
+    first_name = parts[0]
+    last_name = parts[-1]
+    
+    url = f"https://api.hunter.io/v2/email-finder?domain={company_domain}&first_name={first_name}&last_name={last_name}&api_key={HUNTER_API_KEY}"
+    
+    try:
+        response = requests.get(url)
+        data = response.json().get('data', {})
+        
+        if data and data.get('verification', {}).get('status') == 'deliverable':
+            print(f"✅ Email verificata trovata: {data['email']}")
+            return data['email']
+        
+        # Se non è "deliverable", meglio non rischiare il bounce
+        return None
+    except Exception as e:
+        print(f"⚠️ Errore durante la ricerca email: {e}")
+        return None
+
+def extract_domain_from_url(url):
+    """
+    Utility per estrarre il dominio (es. azienda.it) da un URL
+    """
+    match = re.search(r'https?://(?:www\.)?([^/]+)', url)
+    return match.group(1) if match else None
