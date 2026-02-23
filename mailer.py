@@ -1,48 +1,33 @@
 import smtplib
-from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from jinja2 import Environment, FileSystemLoader
-import os
+from email.mime.multipart import MIMEMultipart
+import jinja2
 
 class Mailer:
-    def __init__(self, host, port, user, password):
-        self.host = host
+    def __init__(self, server, port, user, password):
+        self.server = server
         self.port = port
         self.user = user
         self.password = password
-        # Configurazione Jinja2 per i template
-        self.env = Environment(loader=FileSystemLoader('templates'))
 
-    def generate_body(self, template_name, data):
-        """Genera l'HTML finale usando il template e i dati forniti."""
-        template = self.env.get_template(template_name)
+    def generate_body(self, template_path, data):
+        with open(template_path, 'r', encoding='utf-8') as f:
+            template = jinja2.Template(f.read())
         return template.render(data)
 
-    def send_mail(self, to_email, subject, html_content):
-        """Invia la mail formattata in HTML."""
+    def send_mail(self, receiver_email, subject, body_html):
         try:
             msg = MIMEMultipart()
             msg['From'] = self.user
-            msg['To'] = to_email
+            msg['To'] = receiver_email
             msg['Subject'] = subject
-            
-            # Attacchiamo il contenuto come HTML
-            msg.attach(MIMEText(html_content, 'html'))
+            msg.attach(MIMEText(body_html, 'html'))
 
-            # Gestione intelligente della connessione
-            if self.port == 587:
-                # Connessione SSL diretta (Porta 465)
-                server = smtplib.SMTP_SSL(self.host, self.port)
-            else:
-                # Connessione TLS (Porta 587)
-                server = smtplib.SMTP(self.host, self.port)
-                server.starttls()
-            
-            server.login(self.user, self.password)
-            server.send_message(msg)
-            server.quit()
+            # Per la porta 465 usiamo SMTP_SSL
+            with smtplib.SMTP_SSL(self.server, self.port) as server:
+                server.login(self.user, self.password)
+                server.sendmail(self.user, receiver_email, msg.as_string())
             return True
         except Exception as e:
-            # Stampiamo l'errore per vederlo nei log di Streamlit
-            print(f"ERRORE MAILER: {e}")
+            print(f"Errore: {e}")
             return False
