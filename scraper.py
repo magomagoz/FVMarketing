@@ -7,9 +7,9 @@ def search_company_list(query):
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Query rinforzata per forzare Google a mostrare sede e fatturato negli snippet
+    # Query specifica per dati fiscali e geografici
     payload = {
-        "q": f"{query} sede legale fatturato euro sito:reportaziende.it OR sito:ufficiocamerale.it",
+        "q": f"{query} sede legale fatturato sito:reportaziende.it OR sito:ufficiocamerale.it OR sito:paginegialle.it",
         "gl": "it", "hl": "it"
     }
     
@@ -25,21 +25,20 @@ def search_company_list(query):
 
             piva_match = re.search(r'\b\d{11}\b', full_text)
             if piva_match:
-                # ESTRAZIONE FATTURATO: Cerca pattern come "10.000.000", "5 mln", "euro 100.000"
+                # 1. Fatturato
                 rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
-                revenue = rev_match.group(0) if rev_match else "Richiedi Visura"
+                revenue = rev_match.group(0) if rev_match else "Dato non disp."
 
-                # ESTRAZIONE SEDE LEGALE: Cerca CAP + Città o nomi di città noti
-                # Cerchiamo di isolare la parte che sembra un indirizzo
-                loc_match = re.search(r'(?:sede a|basata a|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
-                if loc_match:
-                    location = loc_match.group(1)
-                else:
-                    # Fallback: prendiamo l'ultima parola del titolo prima dei trattini
-                    location = title.split('-')[0].split(',')[-1].strip()
+                # 2. SEDE LEGALE (Migliorata): Cerca il pattern "Città (Provincia)" o CAP
+                loc_match = re.search(r'\b(?:sede|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', snippet)
+                if not loc_match:
+                    # Prova a cercare un CAP seguito da città
+                    loc_match = re.search(r'\b\d{5}\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
+                
+                location = loc_match.group(1) if loc_match else "Verificare su sito"
 
                 companies.append({
-                    "name": title.split(' - ')[0].replace('S.r.l.', '').replace('Srl', '').strip().upper(),
+                    "name": title.split(' - ')[0].split(' | ')[0].split(',')[0].strip().upper(),
                     "piva": piva_match.group(0),
                     "location": location,
                     "revenue": revenue
@@ -48,17 +47,55 @@ def search_company_list(query):
     except:
         return []
 
+def find_emails(company_name, person_name=""):
+    """Cerca email istituzionali o personali sul web"""
+    search_url = "https://google.serper.dev/search"
+    api_key = st.secrets.get("SERPER_API_KEY")
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    
+    # Query per email istituzionale e specifica del referente
+    query = f"email @{company_name.replace(' ', '').lower()}.it OR email @{company_name.replace(' ', '').lower()}.com"
+    if person_name:
+        query += f" OR \"{person_name}\" email"
+
+    try:
+        payload = {"q": query, "gl": "it", "hl": "it"}
+        res = requests.post(search_url, json=payload, headers=headers).json().get('organic', [])
+        
+        emails = []
+        for r in res:
+            found = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r.get('snippet', ''))
+            emails.extend(found)
+        
+        # Pulizia: rimuove duplicati e email comuni non utili
+        valid_emails = list(set([e.lower() for e in emails if not any(x in e for x in ['sentry', 'example', 'wix'])]))
+        return valid_emails if valid_emails else ["info@" + company_name.replace(" ", "").lower() + ".it"]
+    except:
+        return ["Email non trovata"]
+
 def search_decision_maker(company_name):
-    # (Mantieni la funzione search_decision_maker che già funziona bene)
-    # Assicurati solo che restituisca una lista di dizionari
+    # Funzione esistente potenziata con ricerca email per ogni lead
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     keyword = company_name.split()[0]
+    
     try:
         payload = {"q": f"site:linkedin.com/in/ \"{keyword}\" (Responsabile OR Direttore)", "gl": "it", "hl": "it"}
         res = requests.post(search_url, json=payload, headers=headers).json().get('organic', [])
-        leads = [{"name": r['title'].split(' - ')[0].split(' | ')[0].replace("Profilo ", "").strip(), "source": "LinkedIn"} for r in res[:3]]
-        return leads if leads else [{"name": "Direttore Generale", "source": "Ufficio Direzione"}]
+        leads = []
+        for r in res[:3]:
+            nome = r['title'].split(' - ')[0].split(' | ')[0].replace("Profilo ", "").strip()
+            if len(nome.split()) < 5:
+                # Per ogni lead trovato, proviamo a cercare la sua email
+                leads.append({
+                    "name": nome, 
+                    "source": "LinkedIn",
+                    "emails": find_emails(company_name, nome)
+                })
+        
+        if not leads:
+            leads = [{"name": "Direttore Generale", "source": "Ufficio Direzione", "emails": find_emails(company_name)}]
+        return leads
     except:
-        return [{"name": "Direttore Generale", "source": "Generico"}]
+        return [{"name": "Direttore Generale", "source": "Generico", "emails": ["Email non trovata"]}]
