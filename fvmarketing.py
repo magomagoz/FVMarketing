@@ -43,25 +43,51 @@ if search_button and company_input:
         else:
             st.error("Impossibile trovare dati validi per questa azienda.")
 
-# --- FASE 3: VISUALIZZAZIONE E DECISIONE ---
-if st.session_state.data_found:
-    data = st.session_state.data_found
+# --- MAIN ---
+if st.session_state.get('data_found'):
+    df = st.session_state.data_found
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🏢 Dati Aziendali")
-        st.write(f"**Ragione Sociale:** {data['corp']['name']}")
-        st.write(f"**Indirizzo:** {data['corp']['address']}")
-    
-    with col2:
-        st.subheader("👤 Decision Maker")
-        if data['lead']:
-            st.write(f"**Nome:** {data['lead']['name']}")
-            st.write(f"**Ruolo:** Direttore Generale")
-            st.write(f"**Email:** {data['email']}")
-        else:
-            st.warning("Nessun contatto trovato.")
+    with st.container(border=True):
+        st.subheader(f"📊 {df['corp']['name']}")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
+        with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
+        with c3: st.metric("📍 Sede Legale", df['corp']['location'])
+
+    st.subheader("👥 Referente per la e-mail")
+    lead_idx = [l['name'] for l in df['leads']].index(st.selectbox("🎯 Destinatario:", [l['name'] for l in df['leads']]))
+    lead_scelto = df['leads'][lead_idx]
+    nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
+
+    # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
+    testo_pieno = f"""Gentile {nome_gentile},
+
+Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
+
+In allegato troverà una simulazione di impianto fotovoltaico con il ROI che le agevolazioni permettono: potrà vedere come l'investimento si ripaga immediatamente, grazie al risparmio energetico e all'IperAmmortamento 2026.
+
+Vorrei avere l'opportunità di analizzare i suoi consumi per proporle, senza nessun impegno, il corretto Ritorno sull'Investimento.
+
+Non esiti nel contattarmi per ogni delucidazione in merito.
+
+Un cordiale saluto.
+
+Enrico Magostini
+Consulente Energetico
+
+SUN ECO POWER S.r.l.
+Mobile: +39 334 607 9956
+e-mail: e.magostini@sunecopower.it
+P.IVA/C.F: 01870010855
+REA: CL-104471
+
+www.sunecopower.it
+
+Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati."""
+
+    # Inizializza la bozza se non esiste
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = testo_pieno
 
     st.divider()
 
