@@ -39,7 +39,8 @@ with st.sidebar:
         </style>
         """, unsafe_allow_html=True)
 
-# --- MAIN ---
+# ... (Partie iniziale invariata) ...
+
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
@@ -48,11 +49,12 @@ if st.session_state.get('data_found'):
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
-        with c3: st.metric("📍 Sede Legale", df['corp']['location'])
+        with c3: st.metric("📍 Città", df['corp']['location']) # Rinominato in Città
 
-    st.subheader("👥 Referente per la e-mail")
-    lead_idx = [l['name'] for l in df['leads']].index(st.selectbox("🎯 Destinatario:", [l['name'] for l in df['leads']]))
-    lead_scelto = df['leads'][lead_idx]
+    st.subheader("👥 Referenti individuati (LinkedIn, Facebook, Web)")
+    nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
+    sel_lead_idx = nomi_leads.index(st.selectbox("🎯 Invia a questo contatto:", nomi_leads))
+    lead_scelto = df['leads'][sel_lead_idx]
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
@@ -85,42 +87,39 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     if 'bozza_editor' not in st.session_state:
         st.session_state.bozza_editor = testo_pieno
 
-    # --- LISTA EMAIL APRIBILE ---
-    with st.expander("📧 VEDI EMAIL TROVATE (Seleziona quella corretta)", expanded=False):
-        email_selezionata = st.radio("Email disponibili:", lead_scelto['emails'])
-    
-    # --- MODIFICA CORPO MAIL (CHIUSO) ---
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
-        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=300)
 
-    # --- ANTEPRIMA ---
-    st.subheader("✍️ Anteprima")
-    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
-    st.components.v1.html(anteprima, height=400, scrolling=True)
+
+
+
+    
+    # --- LISTA EMAIL APRIBILE ---
+    with st.expander("📧 Email individuate (Seleziona)", expanded=False):
+        email_selezionata = st.radio("Scegli indirizzo:", lead_scelto['emails'])
+    
+    # --- EDITOR (Inizialmente CHIUSO) ---
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
+        # ... (Assicurati che qui ci sia la logica del testo_pieno definita prima)
+        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.get('bozza_editor', ''), height=300)
 
     # --- CAMPO FINALE EDITABILE ---
     st.divider()
-    destinatario_finale = st.text_input("📧 Invia a (Controlla o modifica):", value=email_selezionata)
+    destinatario_finale = st.text_input("📧 Destinatario finale (Editabile):", value=email_selezionata)
 
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if destinatario_finale:
-            with st.spinner("Invio mail in corso..."):
-                try:
-                    # Chiamata alla funzione del tuo file mailer.py
-                    # Cambia l'oggetto della mail come preferisci
-                    successo = mailer.send_mail(
-                        receiver_email=destinatario_finale,
-                        subject=f"Simulazione ROI Fotovoltaico 2026 - {df['corp']['name']}",
-                        body_html=anteprima # Usiamo l'anteprima HTML generata
-                    )
-                    
-                    if successo:
-                        st.balloons()
-                        st.success(f"✅ Email inviata con successo a: {destinatario_finale}")
-                    else:
-                        st.error("❌ Errore durante l'invio. Verifica le credenziali nei Secrets.")
-                except Exception as e:
-                    st.error(f"❌ Errore tecnico: {e}")
-        else:
-            st.error("Inserisci un indirizzo email valido!")
+            with st.spinner("Spedizione in corso..."):
+                # ATTENZIONE: Usa i nomi corretti delle funzioni del tuo mailer.py
+                corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+                anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+                
+                successo = mailer.send_mail(
+                    receiver_email=destinatario_finale, 
+                    subject=f"Proposta Fotovoltaico 2026 - {df['corp']['name']}",
+                    body_html=anteprima
+                )
+                
+                if successo:
+                    st.balloons()
+                    st.success(f"Mail inviata a {destinatario_finale}")
+                else:
+                    st.error("Errore nell'invio. Controlla le credenziali SMTP.")
