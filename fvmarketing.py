@@ -37,15 +37,19 @@ if st.session_state.get('data_found'):
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
-
-    st.subheader("👥 Referenti Individuati (Priorità Titolari)")
-    nomi_leads = [f"{l['name']} [{l['source']}]" for l in df['leads']]
     
-    # Fix NameError: Definiamo subito lead_scelto
-    sel_box = st.selectbox("🎯 Seleziona destinatario:", nomi_leads)
-    lead_scelto = df['leads'][nomi_leads.index(sel_box)]
+    st.subheader("👥 Referenti individuati su LinkedIn")
     
-    nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
+    # Creiamo etichette chiare per la selectbox
+    nomi_per_scelta = [f"{l['name']} ({l['role_info']})" for l in df['leads']]
+    
+    scelta = st.selectbox("Seleziona il contatto per la mail:", nomi_per_scelta)
+    lead_scelto = df['leads'][nomi_per_scelta.index(scelta)]
+    
+    # Mostriamo il link al profilo per tua verifica
+    st.caption(f"🔗 [Apri profilo LinkedIn]({lead_scelto.get('link', '#')})")
+    
+    #nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
     with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
         email_sel = st.radio("Invia a:", lead_scelto['emails'])
