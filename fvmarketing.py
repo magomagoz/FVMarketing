@@ -1,102 +1,21 @@
-import streamlit as st
-from scraper import search_company_list, search_linkedin_leads
-from mailer import Mailer
+import requests
+from bs4 import BeautifulSoup
 
-# Setup mailer
-mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
+def get_company_data(company_name):
+    # Logica per interrogare API InfoCamere o database simili
+    print(f"Recupero dati ufficiali per: {company_name}")
+    return {"domain": f"{company_name.lower().replace(' ', '')}.it"}
 
-st.set_page_config(layout="wide", page_title="FV Marketing Pro")
-st.image("banner.png", use_container_width=True)
+def find_decision_maker(domain):
+    # Logica di scraping o uso API esterne (es. Hunter.io)
+    print(f"Ricerca DG su {domain}...")
+    return {"name": "Mario Rossi", "email": "m.rossi@azienda.it"}
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("🔍 Ricerca Azienda")
-    query = st.text_input("Inserisci Nome Azienda", key="input_query")
-    if query:
-        if 'companies' not in st.session_state or st.session_state.get('last_q') != query:
-            st.session_state.companies = search_company_list(query)
-            st.session_state.last_q = query
-        
-        if st.session_state.get('companies'):
-            labels = [f"🏢 {c['name']}" for c in st.session_state.companies]
-            idx = st.radio("Seleziona:", range(len(labels)), format_func=lambda x: labels[x])
-            if st.button("🚀 ANALIZZA SELEZIONATA"):
-                st.session_state.data_found = {
-                    "corp": st.session_state.companies[idx],
-                    "leads": search_linkedin_leads(st.session_state.companies[idx]['name'])
-                }
-                if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
-                st.rerun()
+def send_smart_email(contact_info):
+    # Integrazione con un servizio tipo SendGrid o Mailgun
+    print(f"Invio mail a {contact_info['email']}...")
 
-# --- MAIN ---
-if st.session_state.get('data_found'):
-    df = st.session_state.data_found
-    
-    # Dashboard Azienda
-    with st.container(border=True):
-        st.subheader(f"📊 {df['corp']['name']}")
-        c1, c2, c3 = st.columns(3)
-        with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
-        with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
-        with c3: st.metric("📍 Città", df['corp']['location'])
-
-    # Selezione Referente
-    st.subheader("👥 Referenti trovati su LinkedIn")
-    opzioni = [f"{l['name']} ({l['role']})" for l in df['leads']]
-    scelta = st.selectbox("🎯 Seleziona destinatario:", opzioni)
-    
-    # FIX: Definiamo lead_scelto e nome_gentile subito per evitare NameError
-    lead_scelto = df['leads'][opzioni.index(scelta)]
-    nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
-
-    # Canale Email
-    with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
-        email_sel = st.radio("Scegli indirizzo:", lead_scelto['emails'])
-    
-    # Gestione Bozza
-
-    
-    # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
-    testo_pieno = f"""Gentile {nome_gentile},
-
-Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
-
-In allegato troverà una simulazione di impianto fotovoltaico con il ROI che le agevolazioni permettono: potrà vedere come l'investimento si ripaga immediatamente, grazie al risparmio energetico e all'IperAmmortamento 2026.
-
-Vorrei avere l'opportunità di analizzare i suoi consumi per proporle, senza nessun impegno, il corretto Ritorno sull'Investimento.
-
-Non esiti nel contattarmi per ogni delucidazione in merito.
-
-Un cordiale saluto.
-
-Enrico Magostini
-Consulente Energetico
-
-SUN ECO POWER S.r.l.
-Mobile: +39 334 607 9956
-e-mail: e.magostini@sunecopower.it
-P.IVA/C.F: 01870010855
-REA: CL-104471
-
-www.sunecopower.it
-
-Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati."""
-
-    # Inizializza la bozza se non esiste
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_pieno
-    if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_base
-
-    with st.expander("📝 MODIFICA TESTO DELLA MAIL", expanded=False):
-        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
-
-    # Anteprima
-    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
-    st.subheader("✍️ Anteprima")
-    st.components.v1.html(anteprima, height=300, scrolling=True)
-
-    if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
-        if mailer.send_mail(email_sel, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
-            st.balloons()
-            st.success(f"Email inviata con successo a {email_sel}!")
+# Esecuzione
+company = get_company_data("Esempio SPA")
+lead = find_decision_maker(company['domain'])
+send_smart_email(lead)
