@@ -1,4 +1,5 @@
 import requests
+import streamlit as st
 import re
 
 # Chiavi API (da inserire in un file .env per sicurezza)
@@ -7,14 +8,19 @@ HUNTER_API_KEY = "TUA_HUNTER_API_KEY"
 
 def search_decision_maker(company_name):
     """
-    Cerca il Direttore Generale su Google usando Serper.dev
+    Cerca profili chiave su LinkedIn e Facebook via API Serper.
     """
+    # Se non hai ancora configurato i Secrets, usiamo un fallback di test
+    if "SERPER_API_KEY" not in st.secrets:
+        return {"name": "Ricerca non configurata", "link": "#", "snippet": "Aggiungi SERPER_API_KEY nei Secrets"}
+
     url = "https://google.serper.dev/search"
-    query = f'"{company_name}" (Direttore Generale OR "CEO" OR "General Manager") LinkedIn'
+    # Cerchiamo su più piattaforme social contemporaneamente
+    query = f'site:linkedin.com/in/ OR site:facebook.com "{company_name}" (Direttore OR CEO OR Titolare)'
     
-    payload = {"q": query}
+    payload = {"q": query, "num": 5}
     headers = {
-        'X-API-KEY': SERPER_API_KEY,
+        'X-API-KEY': st.secrets["SERPER_API_KEY"],
         'Content-Type': 'application/json'
     }
 
@@ -23,21 +29,16 @@ def search_decision_maker(company_name):
         results = response.json().get('organic', [])
         
         if results:
-            # Analizziamo il primo risultato utile
-            first_result = results[0]
-            title = first_result.get('title', '')
-            
-            # Pulizia del nome: spesso il titolo è "Mario Rossi - Direttore Generale - Azienda"
-            # Usiamo una regex semplice o split
-            nome_estratto = title.split('-')[0].split('|')[0].strip()
-            
-            print(f"🎯 Trovato potenziale Lead: {nome_estratto}")
+            # Prendiamo il primo risultato più rilevante
+            res = results[0]
             return {
-                "name": nome_estratto,
-                "link": first_result.get('link')
+                "name": res.get('title', '').split('-')[0].split('|')[0].strip(),
+                "link": res.get('link'),
+                "snippet": res.get('snippet', ''),
+                "source": "LinkedIn" if "linkedin" in res.get('link') else "Facebook"
             }
     except Exception as e:
-        print(f"⚠️ Errore durante la ricerca Google: {e}")
+        print(f"Errore scraping: {e}")
     
     return None
 
