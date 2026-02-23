@@ -6,32 +6,46 @@ def search_company_list(query):
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    
     payload = {
         "q": f"{query} sede legale fatturato sito:reportaziende.it OR sito:ufficiocamerale.it",
         "gl": "it", "hl": "it"
     }
+    
     try:
         response = requests.post(search_url, json=payload, headers=headers)
         results = response.json().get('organic', [])
         companies = []
+        
         for res in results:
             snippet = res.get('snippet', '')
             title = res.get('title', '')
-            piva_match = re.search(r'\b\d{11}\b', title + " " + snippet)
+            full_text = f"{title} {snippet}"
+
+            piva_match = re.search(r'\b\d{11}\b', full_text)
             if piva_match:
+                # FATTURATO
                 rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
-                # PULIZIA LOCALITÀ: Cerca pattern come "Aprilia (LT)" o "Marcianise (CE)"
-                loc_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', snippet)
-                location = loc_match.group(1) if loc_match else title.split(',')[-1].strip()
-                
+                revenue = rev_match.group(0) if rev_match else "Dato non disp."
+
+                # LOCALITÀ (Logica potenziata)
+                # 1. Cerca Città (PROVINCIA)
+                loc_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', full_text)
+                if loc_match:
+                    location = loc_match.group(1)
+                else:
+                    # 2. Se non lo trova, prova a isolare la parte dopo l'ultimo trattino nel titolo
+                    location = title.split('-')[-1].strip() if '-' in title else "Italia (Verificare)"
+
                 companies.append({
                     "name": title.split(' - ')[0].split(' | ')[0].split(',')[0].strip().upper(),
                     "piva": piva_match.group(0),
-                    "location": location if len(location) < 30 else "Vedi sito",
-                    "revenue": rev_match.group(0) if rev_match else "Dato non disp."
+                    "location": location,
+                    "revenue": revenue
                 })
         return companies
-    except: return []
+    except:
+        return []
 
 def find_emails(company_name, person_name=""):
     # Cerca email reali e genera quella istituzionale come fallback
