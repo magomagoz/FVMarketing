@@ -1,47 +1,34 @@
 import streamlit as st
-import time
-from validator import validate_piva_vies
-from scraper import search_decision_maker, get_verified_email
+from scraper import search_company_list, search_decision_maker
 from mailer import Mailer
 
-# Configurazione Mailer (Mock per il test)
-mailer = Mailer("smtp.gmail.com", 465, "test@test.it", "password")
+# Configurazione Mailer (Usa Password per le App se usi Gmail)
+mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
-st.title("🚀 Business Lead Finder")
+st.set_page_config(layout="wide", page_title="FV Marketing Pro")
+st.image("banner.png", use_container_width=True)
 
-# --- FASE 1: INPUT ---
+# CSS per metriche piccole
+st.markdown("<style>[data-testid='stMetricValue']{font-size:16px!important;}</style>", unsafe_allow_html=True)
+
+# --- SIDEBAR ---
 with st.sidebar:
-    st.header("Ricerca Azienda")
-    company_input = st.text_input("Nome Azienda o P.IVA")
-    search_button = st.button("Analizza Azienda")
-
-# Inizializziamo lo stato della sessione per "ricordare" i dati tra un click e l'altro
-if 'data_found' not in st.session_state:
-    st.session_state.data_found = None
-
-# --- FASE 2: ELABORAZIONE ---
-if search_button and company_input:
-    with st.spinner("Recupero informazioni in corso..."):
-        # Se l'input è numerico, proviamo la validazione P.IVA
-        if company_input.isdigit():
-            info_corp = validate_piva_vies(company_input)
-        else:
-            # Qui potresti aggiungere una ricerca Google per trovare la P.IVA dal nome
-            # Per ora usiamo il nome direttamente per lo scraping
-            info_corp = {"name": company_input.title(), "address": "Indirizzo non trovato", "valid": True}
-
-        if info_corp and info_corp.get('valid'):
-            # Cerchiamo il Direttore Generale
-            lead = search_decision_maker(info_corp['name'])
-            
-            # Salviamo tutto nello stato della sessione
-            st.session_state.data_found = {
-                "corp": info_corp,
-                "lead": lead,
-                "email": "mario.rossi@azienda.it" # Simulazione email trovata
-            }
-        else:
-            st.error("Impossibile trovare dati validi per questa azienda.")
+    st.header("🔍 Ricerca Azienda")
+    query = st.text_input("Nome Azienda", key="input_query")
+    if query:
+        if 'companies' not in st.session_state or st.session_state.get('last_q') != query:
+            st.session_state.companies = search_company_list(query)
+            st.session_state.last_q = query
+        if st.session_state.get('companies'):
+            labels = [f"🏢 {c['name']}" for c in st.session_state.companies]
+            idx = st.radio("Seleziona:", range(len(labels)), format_func=lambda x: labels[x])
+            if st.button("🚀 ANALIZZA SELEZIONATA"):
+                st.session_state.data_found = {
+                    "corp": st.session_state.companies[idx],
+                    "leads": search_decision_maker(st.session_state.companies[idx]['name'])
+                }
+                if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
+                st.rerun()
 
 # --- MAIN ---
 if st.session_state.get('data_found'):
@@ -52,12 +39,13 @@ if st.session_state.get('data_found'):
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
-        with c3: st.metric("📍 Sede Legale", df['corp']['location'])
+        with c3: st.metric("📍 Città", df['corp']['location'])
 
-    st.subheader("👥 Referente per la e-mail")
-    lead_idx = [l['name'] for l in df['leads']].index(st.selectbox("🎯 Destinatario:", [l['name'] for l in df['leads']]))
-    lead_scelto = df['leads'][lead_idx]
-    nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
+    st.subheader("👥 Referenti individuati")
+    nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
+    sel_idx = nomi_leads.index(st.selectbox("🎯 Destinatario:", nomi_leads))
+    lead = df['leads'][sel_idx]
+        nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
     testo_pieno = f"""Gentile {nome_gentile},
@@ -91,26 +79,23 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
 
     st.divider()
 
-    # Anteprima della Mail
-    st.subheader("📧 Anteprima Comunicazione")
-    corpo_mail = mailer.generate_body('email_dg.html', {
-        'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
-        'company_name': data['corp']['name'],
-        'city': "vostra sede",
-        'industry': "Innovazione"
-    })
+    # Email picker e Editor (CHIUSI)
+    with st.expander("📧 Email trovate", expanded=False):
+        email_sel = st.radio("Seleziona indirizzo:", lead['emails'])
     
-    with st.container(border=True):
-        st.components.v1.html(corpo_html, height=300, scrolling=True)
+    testo_pieno = f"Gentile {lead['name'].split()[0]},\n\nLe scrivo per l'IperAmmortamento 2026..." # (Inserisci qui il tuo testo completo)
+    if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_pieno
 
-    # Bottoni decisionali
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("✅ Approva e Invia", use_container_width=True, type="primary"):
-            st.success(f"Mail inviata con successo a {data['email']}!")
-            # Qui andrebbe mailer.send_mail(...)
-            st.session_state.data_found = None # Reset
-    with c2:
-        if st.button("❌ Scarta Lead", use_container_width=True):
-            st.info("Lead scartato.")
-            st.session_state.data_found = None # Reset
+    with st.expander("📝 Modifica Testo", expanded=False):
+        st.session_state.bozza_editor = st.text_area("Corpo mail:", value=st.session_state.bozza_editor, height=300)
+
+    st.subheader("✍️ Anteprima e Invio")
+    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    st.components.v1.html(anteprima, height=350, scrolling=True)
+
+    destinatario_finale = st.text_input("📧 Invia a:", value=email_sel)
+    if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
+        if mailer.send_mail(destinatario_finale, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
+            st.balloons()
+            st.success("Inviata!")
