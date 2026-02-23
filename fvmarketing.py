@@ -2,19 +2,15 @@ import streamlit as st
 from scraper import search_company_list, search_decision_maker
 from mailer import Mailer
 
-# Configurazione Mailer (Usa Password per le App se usi Gmail)
+# Setup
 mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
-
 st.set_page_config(layout="wide", page_title="FV Marketing Pro")
 st.image("banner.png", use_container_width=True)
-
-# CSS per metriche piccole
-st.markdown("<style>[data-testid='stMetricValue']{font-size:16px!important;}</style>", unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("🔍 Ricerca Azienda")
-    query = st.text_input("Nome Azienda", key="input_query")
+    query = st.text_input("Inserisci Nome Azienda", key="input_query")
     if query:
         if 'companies' not in st.session_state or st.session_state.get('last_q') != query:
             st.session_state.companies = search_company_list(query)
@@ -34,6 +30,7 @@ with st.sidebar:
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
+    # 1. Visualizzazione Dati Azienda
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
@@ -41,61 +38,53 @@ if st.session_state.get('data_found'):
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
 
+    # 2. Selezione Referente
     st.subheader("👥 Referenti individuati")
     nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
-    sel_idx = nomi_leads.index(st.selectbox("🎯 Destinatario:", nomi_leads))
-    lead = df['leads'][sel_idx]
-    nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
+    
+    # Risoluzione NameError: definiamo lead_scelto subito
+    sel_lead_idx = nomi_leads.index(st.selectbox("🎯 Invia a questo contatto:", nomi_leads))
+    lead_scelto = df['leads'][sel_lead_idx]
+    
+    nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
-    # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
-    testo_pieno = f"""Gentile {nome_gentile},
+    # 3. Gestione Email
+    with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
+        email_selezionata = st.radio("Seleziona quella corretta:", lead_scelto['emails'])
+    
+    # 4. Modifica Testo (CHIUSO)
+    testo_base = f"""Gentile {nome_gentile},
 
 Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
 
-In allegato troverà una simulazione di impianto fotovoltaico con il ROI che le agevolazioni permettono: potrà vedere come l'investimento si ripaga immediatamente, grazie al risparmio energetico e all'IperAmmortamento 2026.
-
-Vorrei avere l'opportunità di analizzare i suoi consumi per proporle, senza nessun impegno, il corretto Ritorno sull'Investimento.
-
-Non esiti nel contattarmi per ogni delucidazione in merito.
+In allegato troverà una simulazione di impianto fotovoltaico con il ROI che le agevolazioni permettono.
 
 Un cordiale saluto.
 
 Enrico Magostini
-Consulente Energetico
+SUN ECO POWER S.r.l."""
 
-SUN ECO POWER S.r.l.
-Mobile: +39 334 607 9956
-e-mail: e.magostini@sunecopower.it
-P.IVA/C.F: 01870010855
-REA: CL-104471
-
-www.sunecopower.it
-
-Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati."""
-
-    # Inizializza la bozza se non esiste
     if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_pieno
+        st.session_state.bozza_editor = testo_base
 
-    st.divider()
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
+        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
 
-    # Email picker e Editor (CHIUSI)
-    with st.expander("📧 Email trovate", expanded=False):
-        email_sel = st.radio("Seleziona indirizzo:", lead['emails'])
-    
-    testo_pieno = f"Gentile {lead['name'].split()[0]},\n\nLe scrivo per l'IperAmmortamento 2026..." # (Inserisci qui il tuo testo completo)
-    if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_pieno
-
-    with st.expander("📝 Modifica Testo", expanded=False):
-        st.session_state.bozza_editor = st.text_area("Corpo mail:", value=st.session_state.bozza_editor, height=300)
-
-    st.subheader("✍️ Anteprima e Invio")
+    # 5. Anteprima HTML
+    st.subheader("✍️ Anteprima")
     corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
-    st.components.v1.html(anteprima, height=350, scrolling=True)
+    anteprima_html = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    st.components.v1.html(anteprima_html, height=300, scrolling=True)
 
-    destinatario_finale = st.text_input("📧 Invia a:", value=email_sel)
+    # 6. Invio Finale
+    st.divider()
+    destinatario_finale = st.text_input("📧 Destinatario finale (Controlla o modifica):", value=email_selezionata)
+
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
-        if mailer.send_mail(destinatario_finale, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
-            st.balloons()
-            st.success("Inviata!")
+        if destinatario_finale:
+            with st.spinner("Invio in corso..."):
+                if mailer.send_mail(destinatario_finale, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima_html):
+                    st.balloons()
+                    st.success(f"Email inviata con successo a {destinatario_finale}!")
+                else:
+                    st.error("Errore nell'invio. Verifica la Password per le App nei Secrets.")
