@@ -32,7 +32,7 @@ with st.sidebar:
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
-    # 1. Dati Azienda
+    # Dashboard Azienda
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
@@ -40,18 +40,21 @@ if st.session_state.get('data_found'):
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
 
-    # 2. Referenti (LinkedIn Deep Scan)
+    # Selezione Referente
     st.subheader("👥 Referenti trovati su LinkedIn")
     opzioni = [f"{l['name']} ({l['role']})" for l in df['leads']]
     scelta = st.selectbox("🎯 Seleziona destinatario:", opzioni)
     
-    # FIX NAMEERROR: Definiamo i dati del lead scelto subito
+    # FIX: Definiamo lead_scelto e nome_gentile subito per evitare NameError
     lead_scelto = df['leads'][opzioni.index(scelta)]
     nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
-    # 3. Canale Email
+    # Canale Email
     with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
-        email_sel = st.radio("Invia a:", lead_scelto['emails'])
+        email_sel = st.radio("Scegli indirizzo:", lead_scelto['emails'])
+    
+    # Gestione Bozza
+
     
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
     testo_pieno = f"""Gentile {nome_gentile},
@@ -87,7 +90,7 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     with st.expander("📝 MODIFICA TESTO DELLA MAIL", expanded=False):
         st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
 
-    # 5. Anteprima
+    # Anteprima
     corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
     anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
     st.subheader("✍️ Anteprima")
@@ -96,4 +99,4 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if mailer.send_mail(email_sel, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
             st.balloons()
-            st.success(f"Mail inviata a {email_sel}!")
+            st.success(f"Email inviata con successo a {email_sel}!")
