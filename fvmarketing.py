@@ -33,26 +33,6 @@ with st.sidebar:
         else:
             st.warning("Nessuna azienda trovata con P.IVA.")
 
-# --- MAIN ---
-if st.session_state.get('data_found'):
-    df = st.session_state.data_found
-    
-    # CSS per rimpicciolire le metriche e i testi
-    #st.markdown("""
-        #<style>
-        #[data-testid="stMetricValue"] {
-            #font-size: 18px !important;
-        #}
-        #[data-testid="stMetricLabel"] {
-            #font-size: 14px !important;
-        #}
-        #.small-font {
-            #font-size: 14px !important;
-            #color: #555;
-        #}
-        #</style>
-        #""", unsafe_allow_html=True)
-
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] {
@@ -65,19 +45,20 @@ if st.session_state.get('data_found'):
         </style>
         """, unsafe_allow_html=True)
 
-    
+# ... (parte iniziale del tuo fvmarketing.py rimane uguale) ...
 
+if st.session_state.get('data_found'):
+    df = st.session_state.data_found
     
-
-    # DATI AZIENDALI
+    # DATI AZIENDALI (Metriche rimpicciolite)
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
-        # Usiamo le metriche che ora sono rimpicciolite dal CSS sopra
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
-        with c3: st.metric("📍 Località", df['corp']['location'])
+        with c3: st.metric("📍 Sede Legale", df['corp']['location'])
 
+    # REFERENTI
     st.subheader("👥 Referente per la comunicazione")
     nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
     sel_lead = st.selectbox("🎯 Destinatario:", nomi_leads)
@@ -85,7 +66,7 @@ if st.session_state.get('data_found'):
     lead_scelto = df['leads'][nomi_leads.index(sel_lead)]
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
-    # Stringa corretta con triple virgolette per evitare errori
+        # Stringa corretta con triple virgolette per evitare errori
     testo_base = f"""Gentile {nome_gentile},
 
 Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
@@ -110,6 +91,25 @@ REA: CL-104471
 www.sunecopower.it
 
 Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati. La diffusione, distribuzione e/o copiatura del documento trasmesso da parte di qualsiasi soggetto diverso dal destinatario è proibita."""
+
+    if 'bozza_editor' not in st.session_state:
+        st.session_state.bozza_editor = testo_base
+
+    # NOTA: expanded=False lo rende chiuso all'avvio
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
+        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
+        st.session_state.bozza_editor = testo_chiaro
+
+    # ANTEPRIMA (Sempre visibile per controllo rapido)
+    st.subheader("✍️ Anteprima")
+    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    
+    with st.container(border=True):
+        st.components.v1.html(anteprima, height=400, scrolling=True)
+        if st.button("🚀 INVIA ORA", type="primary"):
+            st.balloons()
+            st.success("Mail inviata con successo!")
 
     if 'bozza_editor' not in st.session_state or nome_gentile not in st.session_state.bozza_editor:
         st.session_state.bozza_editor = testo_base
