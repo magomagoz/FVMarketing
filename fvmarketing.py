@@ -23,7 +23,6 @@ with st.sidebar:
             
             if st.button("🚀 ANALIZZA SELEZIONATA"):
                 with st.spinner("Cercando referenti..."):
-                    # Passiamo il nome pulito allo scraper
                     st.session_state.data_found = {
                         "corp": st.session_state.companies[idx],
                         "leads": search_decision_maker(st.session_state.companies[idx]['name'])
@@ -35,20 +34,15 @@ with st.sidebar:
 
     st.markdown("""
         <style>
-        [data-testid="stMetricValue"] {
-            font-size: 16px !important; /* Leggermente più piccolo per far stare l'indirizzo */
-            white-space: normal !important;
-        }
-        [data-testid="stMetricLabel"] {
-            font-size: 13px !important;
-        }
+        [data-testid="stMetricValue"] { font-size: 16px !important; white-space: normal !important; }
+        [data-testid="stMetricLabel"] { font-size: 13px !important; }
         </style>
         """, unsafe_allow_html=True)
 
+# --- MAIN ---
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
-    # DATI AZIENDALI (Metriche rimpicciolite)
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
@@ -61,26 +55,8 @@ if st.session_state.get('data_found'):
     lead_scelto = df['leads'][lead_idx]
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
-    # --- LISTA EMAIL APRIBILE ---
-    with st.expander("📧 VEDI EMAIL TROVATE (Seleziona quella corretta)", expanded=False):
-        # Seleziona l'email dalla lista trovata
-        email_selezionata = st.radio("Email disponibili:", lead_scelto['emails'])
-    
-    # --- MODIFICA CORPO MAIL (CHIUSO) ---
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
-        testo_base = f"Gentile {lead_scelto['name'].split()[0]},\n\n..." # Tuo testo
-        if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_base
-        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
-
-    # --- ANTEPRIMA ---
-    st.subheader("✍️ Anteprima")
-    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
-    st.components.v1.html(anteprima, height=350, scrolling=True)
-
-
-    # Stringa corretta con triple virgolette per evitare errori
-    testo_base = f"""Gentile {nome_gentile},
+    # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
+    testo_pieno = f"""Gentile {nome_gentile},
 
 Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
 
@@ -103,11 +79,25 @@ REA: CL-104471
 
 www.sunecopower.it
 
-Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati. La diffusione, distribuzione e/o copiatura del documento trasmesso da parte di qualsiasi soggetto diverso dal destinatario è proibita."""
+Le informazioni contenute nella presente comunicazione e i relativi allegati possono essere riservate e sono, comunque, destinate esclusivamente alle persone o alla Società sopraindicati."""
 
+    # Inizializza la bozza se non esiste
     if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_base
+        st.session_state.bozza_editor = testo_pieno
+
+    # --- LISTA EMAIL APRIBILE ---
+    with st.expander("📧 VEDI EMAIL TROVATE (Seleziona quella corretta)", expanded=False):
+        email_selezionata = st.radio("Email disponibili:", lead_scelto['emails'])
     
+    # --- MODIFICA CORPO MAIL (CHIUSO) ---
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
+        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=300)
+
+    # --- ANTEPRIMA ---
+    st.subheader("✍️ Anteprima")
+    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    st.components.v1.html(anteprima, height=400, scrolling=True)
 
     # --- CAMPO FINALE EDITABILE ---
     st.divider()
@@ -115,7 +105,6 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
 
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if destinatario_finale:
-            # Qui andrebbe la funzione mailer.send(destinatario_finale, st.session_state.bozza_editor)
             st.balloons()
             st.success(f"Email inviata correttamente a: {destinatario_finale}")
         else:
