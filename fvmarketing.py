@@ -45,7 +45,7 @@ if st.session_state.get('data_found'):
     nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
     sel_idx = nomi_leads.index(st.selectbox("🎯 Destinatario:", nomi_leads))
     lead = df['leads'][sel_idx]
-        nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
+    nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
     testo_pieno = f"""Gentile {nome_gentile},
