@@ -30,7 +30,7 @@ class Mailer:
             msg.attach(MIMEText(html_content, 'html'))
 
             # Gestione intelligente della connessione
-            if self.port == 465:
+            if self.port == 587:
                 # Connessione SSL diretta (Porta 465)
                 server = smtplib.SMTP_SSL(self.host, self.port)
             else:
