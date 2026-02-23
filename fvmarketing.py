@@ -45,8 +45,6 @@ with st.sidebar:
         </style>
         """, unsafe_allow_html=True)
 
-# ... (parte iniziale del tuo fvmarketing.py rimane uguale) ...
-
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
@@ -110,19 +108,3 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
         if st.button("🚀 INVIA ORA", type="primary"):
             st.balloons()
             st.success("Mail inviata con successo!")
-
-    if 'bozza_editor' not in st.session_state or nome_gentile not in st.session_state.bozza_editor:
-        st.session_state.bozza_editor = testo_base
-
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=True):
-        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=300)
-        st.session_state.bozza_editor = testo_chiaro
-
-    st.subheader("✍️ Anteprima")
-    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
-    
-    with st.container(border=True):
-        st.components.v1.html(anteprima, height=450, scrolling=True)
-        if st.button("🚀 INVIA ORA", type="primary"):
-            st.balloons()
