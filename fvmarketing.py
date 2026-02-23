@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from validator import validate_piva_vies
-from scraper import search_decision_maker, get_verified_email
+#from scraper import search_decision_maker, get_verified_email
 from mailer import Mailer
 
 # Configurazione Mailer (Mock per il test)
