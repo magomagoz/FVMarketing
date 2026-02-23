@@ -2,7 +2,7 @@ import streamlit as st
 from scraper import search_company_list, search_linkedin_leads
 from mailer import Mailer
 
-# Setup mailer (Controlla i tuoi Secrets!)
+# Setup mailer
 mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
 st.set_page_config(layout="wide", page_title="FV Marketing Pro")
@@ -40,19 +40,18 @@ if st.session_state.get('data_found'):
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
 
-    # 2. Selezione Referente
+    # 2. Referenti (LinkedIn Deep Scan)
     st.subheader("👥 Referenti trovati su LinkedIn")
     opzioni = [f"{l['name']} ({l['role']})" for l in df['leads']]
-    scelta = st.selectbox("🎯 Destinatario comunicazione:", opzioni)
+    scelta = st.selectbox("🎯 Seleziona destinatario:", opzioni)
     
-    # Questo risolve il NameError dello screenshot
+    # FIX NAMEERROR: Definiamo i dati del lead scelto subito
     lead_scelto = df['leads'][opzioni.index(scelta)]
-    nome_per_mail = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
+    nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
-    # 3. Email e Testo
+    # 3. Canale Email
     with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
-        email_sel = st.radio("Scegli indirizzo:", lead_scelto['emails'])
-    
+        email_sel = st.radio("Invia a:", lead_scelto['emails'])
     
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
     testo_pieno = f"""Gentile {nome_gentile},
@@ -85,10 +84,10 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
         st.session_state.bozza_editor = testo_pieno
     if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_base
 
-    with st.expander("📝 MODIFICA TESTO", expanded=False):
-        st.session_state.bozza_editor = st.text_area("Corpo:", value=st.session_state.bozza_editor, height=250)
+    with st.expander("📝 MODIFICA TESTO DELLA MAIL", expanded=False):
+        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
 
-    # 4. Anteprima e Invio
+    # 5. Anteprima
     corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
     anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
     st.subheader("✍️ Anteprima")
@@ -97,4 +96,4 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if mailer.send_mail(email_sel, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
             st.balloons()
-            st.success(f"Email inviata con successo a {email_sel}!")
+            st.success(f"Mail inviata a {email_sel}!")
