@@ -7,9 +7,9 @@ def search_company_list(query):
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Query specifica per Report Aziende e Ufficio Camerale
+    # Query rinforzata per forzare Google a mostrare sede e fatturato negli snippet
     payload = {
-        "q": f"{query} fatturato sede legale sito:reportaziende.it OR sito:ufficiocamerale.it",
+        "q": f"{query} sede legale fatturato euro sito:reportaziende.it OR sito:ufficiocamerale.it",
         "gl": "it", "hl": "it"
     }
     
@@ -19,61 +19,46 @@ def search_company_list(query):
         companies = []
         
         for res in results:
-            title = res.get('title', '')
             snippet = res.get('snippet', '')
-            full_text = (title + " " + snippet).lower()
+            title = res.get('title', '')
+            full_text = f"{title} {snippet}"
 
-            # 1. Partita IVA
             piva_match = re.search(r'\b\d{11}\b', full_text)
             if piva_match:
-                piva = piva_match.group(0)
-                
-                # 2. Fatturato (cerca cifre seguite da mln o milioni)
+                # ESTRAZIONE FATTURATO: Cerca pattern come "10.000.000", "5 mln", "euro 100.000"
                 rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
-                revenue = rev_match.group(0) if rev_match else "Dato non disp."
+                revenue = rev_match.group(0) if rev_match else "Richiedi Visura"
 
-                # 3. Sede Legale (estrae Città e Provincia)
-                # Cerca pattern come "Roma (RM)" o "Milano" dopo parole chiave
-                loc_match = re.search(r'(?:sede legale|sede):\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\)|[A-Z][a-z]+)', snippet)
+                # ESTRAZIONE SEDE LEGALE: Cerca CAP + Città o nomi di città noti
+                # Cerchiamo di isolare la parte che sembra un indirizzo
+                loc_match = re.search(r'(?:sede a|basata a|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', snippet)
                 if loc_match:
                     location = loc_match.group(1)
                 else:
-                    # Fallback: prende la località dal titolo se separata da virgola
-                    location = title.split(',')[-1].split('-')[-1].strip() if ',' in title or '-' in title else "Italia"
+                    # Fallback: prendiamo l'ultima parola del titolo prima dei trattini
+                    location = title.split('-')[0].split(',')[-1].strip()
 
-                # 4. Pulizia Nome Azienda
-                raw_name = title.split(' - ')[0].split(' | ')[0].split(',')[0]
-                clean_name = re.sub(r'(?i)(s\.r\.l\.|srl|s\.p\.a\.|spa|partita iva.*)', '', raw_name).strip()
-                
                 companies.append({
-                    "name": clean_name.upper(),
-                    "piva": piva,
+                    "name": title.split(' - ')[0].replace('S.r.l.', '').replace('Srl', '').strip().upper(),
+                    "piva": piva_match.group(0),
                     "location": location,
                     "revenue": revenue
                 })
         return companies
-    except Exception:
+    except:
         return []
 
 def search_decision_maker(company_name):
+    # (Mantieni la funzione search_decision_maker che già funziona bene)
+    # Assicurati solo che restituisca una lista di dizionari
     search_url = "https://google.serper.dev/search"
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
-    
-    # Usa solo la prima parola per trovare referenti su LinkedIn
     keyword = company_name.split()[0]
-    payload = {
-        "q": f"site:linkedin.com/in/ \"{keyword}\" (Responsabile OR Direttore OR Owner)",
-        "gl": "it", "hl": "it"
-    }
-    
     try:
+        payload = {"q": f"site:linkedin.com/in/ \"{keyword}\" (Responsabile OR Direttore)", "gl": "it", "hl": "it"}
         res = requests.post(search_url, json=payload, headers=headers).json().get('organic', [])
-        leads = []
-        for r in res:
-            nome = r['title'].split(' - ')[0].split(' | ')[0].replace("Profilo ", "").strip()
-            if len(nome.split()) < 5 and not any(x in nome.lower() for x in ["srl", "spa", "p.iva"]):
-                leads.append({"name": nome, "source": "LinkedIn", "link": r['link']})
+        leads = [{"name": r['title'].split(' - ')[0].split(' | ')[0].replace("Profilo ", "").strip(), "source": "LinkedIn"} for r in res[:3]]
         return leads if leads else [{"name": "Direttore Generale", "source": "Ufficio Direzione"}]
-    except Exception:
+    except:
         return [{"name": "Direttore Generale", "source": "Generico"}]
