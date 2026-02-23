@@ -37,9 +37,27 @@ with st.sidebar:
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
+    # CSS per rimpicciolire le metriche e i testi
+    st.markdown("""
+        <style>
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 14px !important;
+        }
+        .small-font {
+            font-size: 14px !important;
+            color: #555;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+    # DATI AZIENDALI
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
+        # Usiamo le metriche che ora sono rimpicciolite dal CSS sopra
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Località", df['corp']['location'])
