@@ -56,18 +56,30 @@ if st.session_state.get('data_found'):
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Sede Legale", df['corp']['location'])
 
-    st.subheader("👥 Referente per la comunicazione")
-    nomi_leads = [f"{l['name']} ({l['source']})" for l in df['leads']]
-    sel_lead_idx = nomi_leads.index(st.selectbox("🎯 Destinatario:", nomi_leads))
-    lead_scelto = df['leads'][sel_lead_idx]
+    st.subheader("👥 Referente per la e-mail")
+    lead_idx = [l['name'] for l in df['leads']].index(st.selectbox("🎯 Destinatario:", [l['name'] for l in df['leads']]))
+    lead_scelto = df['leads'][lead_idx]
     nome_gentile = lead_scelto['name'].split()[0] if lead_scelto['name'] != "Direttore Generale" else "Direttore"
 
-    # MOSTRA LE EMAIL TROVATE
-    st.write("📧 **Email individuate:**")
-    for mail in lead_scelto['emails']:
-        st.code(mail) # Il formato code permette di copiarle con un click
+    # --- LISTA EMAIL APRIBILE ---
+    with st.expander("📧 VEDI EMAIL TROVATE (Seleziona quella corretta)", expanded=False):
+        # Seleziona l'email dalla lista trovata
+        email_selezionata = st.radio("Email disponibili:", lead_scelto['emails'])
+    
+    # --- MODIFICA CORPO MAIL (CHIUSO) ---
+    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
+        testo_base = f"Gentile {lead_scelto['name'].split()[0]},\n\n..." # Tuo testo
+        if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_base
+        st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
 
-        # Stringa corretta con triple virgolette per evitare errori
+    # --- ANTEPRIMA ---
+    st.subheader("✍️ Anteprima")
+    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    st.components.v1.html(anteprima, height=350, scrolling=True)
+
+
+    # Stringa corretta con triple virgolette per evitare errori
     testo_base = f"""Gentile {nome_gentile},
 
 Le scrivo perché ora l'impianto fotovoltaico per la sua Azienda potrà beneficiare dell'IperAmmortamento 2026, che le permetterà di recuperare il 67% del suo investimento in Credito d'Imposta, immediatamente esigibile già dal 2027.
@@ -95,19 +107,16 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
 
     if 'bozza_editor' not in st.session_state:
         st.session_state.bozza_editor = testo_base
-
-    # NOTA: expanded=False lo rende chiuso all'avvio
-    with st.expander("📝 MODIFICA IL TESTO DELLA MAIL", expanded=False):
-        testo_chiaro = st.text_area("Contenuto:", value=st.session_state.bozza_editor, height=250)
-        st.session_state.bozza_editor = testo_chiaro
-
-    # ANTEPRIMA (Sempre visibile per controllo rapido)
-    st.subheader("✍️ Anteprima")
-    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
-    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
     
-    with st.container(border=True):
-        st.components.v1.html(anteprima, height=400, scrolling=True)
-        if st.button("🚀 INVIA ORA", type="primary"):
+
+    # --- CAMPO FINALE EDITABILE ---
+    st.divider()
+    destinatario_finale = st.text_input("📧 Invia a (Controlla o modifica):", value=email_selezionata)
+
+    if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
+        if destinatario_finale:
+            # Qui andrebbe la funzione mailer.send(destinatario_finale, st.session_state.bozza_editor)
             st.balloons()
-            st.success("Mail inviata con successo!")
+            st.success(f"Email inviata correttamente a: {destinatario_finale}")
+        else:
+            st.error("Inserisci un indirizzo email valido!")
