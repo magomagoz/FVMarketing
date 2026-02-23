@@ -1,35 +1,36 @@
 import requests
+import streamlit as st
 
-def search_robust_people(company_name):
+def search_decision_maker(company_name):
     """
-    Ricerca avanzata su LinkedIn e Facebook tramite Serper/Google.
+    Cerca profili chiave su LinkedIn e Facebook utilizzando query mirate.
     """
-    # Query per LinkedIn: cerca persone con ruoli chiave
-    linkedin_query = f'site:linkedin.com/in/ "{company_name}" ("Direttore" OR "CEO" OR "Titolare")'
+    if "SERPER_API_KEY" not in st.secrets:
+        return {"name": "Configura API Key", "link": "#", "source": "Errore"}
+
+    url = "https://google.serper.dev/search"
+    # Cerchiamo specificamente profili personali su LinkedIn e pagine/post su Facebook
+    queries = [
+        f'site:linkedin.com/in/ "{company_name}" (Direttore OR CEO OR Titolare)',
+        f'site:facebook.com "{company_name}" (Titolare OR Proprietario)'
+    ]
     
-    # Query per Facebook: utile per PMI italiane dove il titolare è molto attivo
-    facebook_query = f'site:facebook.com "{company_name}" (Titolare OR Proprietario)'
-    
-    results = []
-    
-    # Eseguiamo le chiamate (Esempio per LinkedIn)
-    # Nota: Assicurati di avere la chiave SERPER_API_KEY nei segreti di Streamlit
-    headers = {'X-API-KEY': st.secrets["SERPER_API_KEY"], 'Content-Type': 'application/json'}
-    
-    for q in [linkedin_query, facebook_query]:
-        response = requests.post(
-            "https://google.serper.dev/search", 
-            json={"q": q, "num": 3}, 
-            headers=headers
-        )
-        if response.status_code == 200:
-            organic = response.json().get('organic', [])
-            for res in organic:
-                results.append({
-                    "source": "LinkedIn" if "linkedin" in res['link'] else "Facebook",
-                    "title": res['title'],
-                    "link": res['link'],
-                    "snippet": res.get('snippet', '')
+    found_leads = []
+
+    for q in queries:
+        payload = {"q": q, "num": 3}
+        headers = {'X-API-KEY': st.secrets["SERPER_API_KEY"], 'Content-Type': 'application/json'}
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            results = response.json().get('organic', [])
+            for res in results:
+                found_leads.append({
+                    "name": res.get('title', '').split('-')[0].split('|')[0].strip(),
+                    "link": res.get('link'),
+                    "snippet": res.get('snippet', ''),
+                    "source": "LinkedIn" if "linkedin" in res.get('link') else "Facebook"
                 })
-    
-    return results
+        except Exception as e:
+            st.error(f"Errore nella ricerca social: {e}")
+
+    return found_leads # Restituiamo una lista di possibili candidati
