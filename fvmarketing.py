@@ -105,7 +105,22 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
 
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if destinatario_finale:
-            st.balloons()
-            st.success(f"Email inviata correttamente a: {destinatario_finale}")
+            with st.spinner("Invio mail in corso..."):
+                try:
+                    # Chiamata alla funzione del tuo file mailer.py
+                    # Cambia l'oggetto della mail come preferisci
+                    successo = mailer.send_mail(
+                        receiver_email=destinatario_finale,
+                        subject=f"Simulazione ROI Fotovoltaico 2026 - {df['corp']['name']}",
+                        body_html=anteprima # Usiamo l'anteprima HTML generata
+                    )
+                    
+                    if successo:
+                        st.balloons()
+                        st.success(f"✅ Email inviata con successo a: {destinatario_finale}")
+                    else:
+                        st.error("❌ Errore durante l'invio. Verifica le credenziali nei Secrets.")
+                except Exception as e:
+                    st.error(f"❌ Errore tecnico: {e}")
         else:
             st.error("Inserisci un indirizzo email valido!")
