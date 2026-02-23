@@ -1,8 +1,8 @@
 import streamlit as st
-from scraper import search_company_list, search_decision_maker
+from scraper import search_company_list, search_linkedin_leads
 from mailer import Mailer
 
-# Configurazione Mailer
+# Setup mailer (Controlla i tuoi Secrets!)
 mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
 st.set_page_config(layout="wide", page_title="FV Marketing Pro")
@@ -16,13 +16,14 @@ with st.sidebar:
         if 'companies' not in st.session_state or st.session_state.get('last_q') != query:
             st.session_state.companies = search_company_list(query)
             st.session_state.last_q = query
+        
         if st.session_state.get('companies'):
             labels = [f"🏢 {c['name']}" for c in st.session_state.companies]
             idx = st.radio("Seleziona:", range(len(labels)), format_func=lambda x: labels[x])
             if st.button("🚀 ANALIZZA SELEZIONATA"):
                 st.session_state.data_found = {
                     "corp": st.session_state.companies[idx],
-                    "leads": search_decision_maker(st.session_state.companies[idx]['name'])
+                    "leads": search_linkedin_leads(st.session_state.companies[idx]['name'])
                 }
                 if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
                 st.rerun()
@@ -31,28 +32,27 @@ with st.sidebar:
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
+    # 1. Dati Azienda
     with st.container(border=True):
         st.subheader(f"📊 {df['corp']['name']}")
         c1, c2, c3 = st.columns(3)
         with c1: st.metric("🆔 Partita IVA", df['corp']['piva'])
         with c2: st.metric("💰 Fatturato Est.", df['corp']['revenue'])
         with c3: st.metric("📍 Città", df['corp']['location'])
-    
-    st.subheader("👥 Referenti individuati su LinkedIn")
-    
-    # Creiamo etichette chiare per la selectbox
-    nomi_per_scelta = [f"{l['name']} ({l['role_info']})" for l in df['leads']]
-    
-    scelta = st.selectbox("Seleziona il contatto per la mail:", nomi_per_scelta)
-    lead_scelto = df['leads'][nomi_per_scelta.index(scelta)]
-    
-    # Mostriamo il link al profilo per tua verifica
-    st.caption(f"🔗 [Apri profilo LinkedIn]({lead_scelto.get('link', '#')})")
-    
-    #nome_gentile = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
 
+    # 2. Selezione Referente
+    st.subheader("👥 Referenti trovati su LinkedIn")
+    opzioni = [f"{l['name']} ({l['role']})" for l in df['leads']]
+    scelta = st.selectbox("🎯 Destinatario comunicazione:", opzioni)
+    
+    # Questo risolve il NameError dello screenshot
+    lead_scelto = df['leads'][opzioni.index(scelta)]
+    nome_per_mail = lead_scelto['name'].split()[0] if "Direttore" not in lead_scelto['name'] else "Direttore"
+
+    # 3. Email e Testo
     with st.expander("📧 VEDI EMAIL TROVATE", expanded=False):
-        email_sel = st.radio("Invia a:", lead_scelto['emails'])
+        email_sel = st.radio("Scegli indirizzo:", lead_scelto['emails'])
+    
     
     # 1. DEFINIAMO IL TESTO PRIMA DI USARLO
     testo_pieno = f"""Gentile {nome_gentile},
@@ -83,14 +83,12 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     # Inizializza la bozza se non esiste
     if 'bozza_editor' not in st.session_state:
         st.session_state.bozza_editor = testo_pieno
-
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = testo_base
+    if 'bozza_editor' not in st.session_state: st.session_state.bozza_editor = testo_base
 
     with st.expander("📝 MODIFICA TESTO", expanded=False):
         st.session_state.bozza_editor = st.text_area("Corpo:", value=st.session_state.bozza_editor, height=250)
 
-    # Anteprima HTML
+    # 4. Anteprima e Invio
     corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
     anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
     st.subheader("✍️ Anteprima")
@@ -99,4 +97,4 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     if st.button("🚀 INVIA ORA", type="primary", use_container_width=True):
         if mailer.send_mail(email_sel, f"Proposta Fotovoltaico - {df['corp']['name']}", anteprima):
             st.balloons()
-            st.success(f"Email inviata a {email_sel}!")
+            st.success(f"Email inviata con successo a {email_sel}!")
