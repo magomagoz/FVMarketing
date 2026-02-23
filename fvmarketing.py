@@ -1,13 +1,13 @@
-import streamlit as st
 import time
 from validator import validate_piva_vies
-#from scraper import search_decision_maker, get_verified_email
+from scraper import search_decision_maker, get_verified_email
 from mailer import Mailer
 
 # Configurazione Mailer (Mock per il test)
 mailer = Mailer("smtp.gmail.com", 465, "test@test.it", "password")
 
-st.title("🚀 Business Lead Finder")
+st.image("banner.png", use_container_width=True)
+#st.title("🚀 Business Lead Finder")
 
 # --- FASE 1: INPUT ---
 with st.sidebar:
@@ -32,7 +32,7 @@ if search_button and company_input:
 
         if info_corp and info_corp.get('valid'):
             # Cerchiamo il Direttore Generale
-            #lead = search_decision_maker(info_corp['name'])
+            lead = search_decision_maker(info_corp['name'])
             
             # Salviamo tutto nello stato della sessione
             st.session_state.data_found = {
@@ -55,36 +55,103 @@ if st.session_state.data_found:
         st.write(f"**Indirizzo:** {data['corp']['address']}")
     
     with col2:
-        st.subheader("👤 Decision Maker")
-        if data['lead']:
-            st.write(f"**Nome:** {data['lead']['name']}")
-            st.write(f"**Ruolo:** Direttore Generale")
-            st.write(f"**Email:** {data['email']}")
+        #st.subheader("👤 Decision Maker")
+        #if data['lead']:
+            #st.write(f"**Nome:** {data['lead']['name']}")
+            #st.write(f"**Ruolo:** Direttore Generale")
+            #st.write(f"**Email:** {data['email']}")
+        #else:
+            #st.warning("Nessun contatto trovato.")
+    
+        st.subheader("👥 Possibili Decision Maker individuati")
+        
+        # Chiamata alla nuova funzione robusta
+        leads = search_decision_maker(data['corp']['name'])
+        
+        if leads:
+            # Creiamo un selettore per scegliere la persona corretta
+            opzioni = [f"{l['name']} ({l['source']})" for l in leads]
+            scelta = st.selectbox("Seleziona il destinatario della mail:", opzioni)
+            
+            # Recuperiamo i dettagli del lead selezionato
+            index_scelto = opzioni.index(scelta)
+            selected_lead = leads[index_scelto]
+            
+            with st.expander("Dettagli profilo trovato"):
+                st.write(f"📝 *{selected_lead['snippet']}*")
+                st.link_button(f"Vai al profilo {selected_lead['source']}", selected_lead['link'])
+                
+            # Aggiorniamo i dati per il template della mail
+            data['lead'] = selected_lead
         else:
-            st.warning("Nessun contatto trovato.")
+            st.warning("Nessun profilo social trovato. Verrà usato un destinatario generico.")
 
+    
     st.divider()
 
     # Anteprima della Mail
-    st.subheader("📧 Anteprima Comunicazione")
-    corpo_mail = mailer.generate_body('email_dg.html', {
+    st.subheader("📧 Personalizza la Comunicazione")
+
+if st.session_state.data_found:
+    # 1. Recuperiamo i dati dalla sessione
+    data = st.session_state.data_found
+    
+    # 2. Generiamo la bozza iniziale (solo se non l'abbiamo già modificata)
+    bozza_base = mailer.generate_body('email_dg.html', {
         'lead_name': data['lead']['name'] if data['lead'] else "Direttore",
         'company_name': data['corp']['name'],
         'city': "vostra sede",
         'industry': "Innovazione"
     })
-    
-    with st.container(border=True):
-        st.components.v1.html(corpo_html, height=300, scrolling=True)
 
-    # Bottoni decisionali
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("✅ Approva e Invia", use_container_width=True, type="primary"):
-            st.success(f"Mail inviata con successo a {data['email']}!")
-            # Qui andrebbe mailer.send_mail(...)
-            st.session_state.data_found = None # Reset
-    with c2:
-        if st.button("❌ Scarta Lead", use_container_width=True):
-            st.info("Lead scartato.")
-            st.session_state.data_found = None # Reset
+    
+    # 3. Campo di modifica (TextArea)
+    # Usiamo bozza_base come valore iniziale
+    testo_personalizzato = st.text_area(
+        "Modifica il corpo della mail qui:", 
+        value=bozza_base, 
+        height=350
+    )
+
+    st.subheader("✍️ Controlla e Invia")
+    # 4. Anteprima DINAMICA (mostra quello che scrivi nella text_area)
+    with st.container(border=True):
+        st.caption("👁️ Anteprima finale (quello che riceverà il cliente)")
+        st.components.v1.html(testo_personalizzato, height=300, scrolling=True)
+
+        # Sostituisci il blocco dei bottoni finale con questo:
+        
+        st.divider()
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            # INPUT PER LA TUA MAIL DI TEST
+            test_email = st.text_input("Tua mail per il test:", value="tua_mail@esempio.it")
+            if st.button("🧪 INVIA TEST A ME", use_container_width=True):
+                if test_email:
+                    with st.spinner("Invio test..."):
+                        # Invia il testo modificato ma alla TUA mail
+                        successo = mailer.send_mail(
+                            test_email, 
+                            f"[TEST] Proposta per {data['corp']['name']}", 
+                            testo_personalizzato
+                        )
+                        if successo:
+                            st.toast("Mail di test inviata!", icon="📩")
+                else:
+                    st.error("Inserisci un indirizzo per il test")
+        
+        with c2:
+            st.write(" ") # Allineamento estetico
+            st.write(" ") 
+            # BOTTONE INVIO REALE
+            if st.button("🚀 INVIA AL CLIENTE", type="primary", use_container_width=True):
+                with st.spinner("Invio al DG..."):
+                    successo = mailer.send_mail(
+                        data['email'], 
+                        f"Domanda rapida per {data['corp']['name']}", 
+                        testo_personalizzato
+                    )
+                    if successo:
+                        st.balloons()
+                        st.success(f"Inviata a {data['lead']['name']}!")
