@@ -26,15 +26,17 @@ def search_company_list(query):
             if piva_match:
                 rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
                 
-                # CITTÀ: Filtro rigoroso per escludere P.IVA e numeri
-                # Cerca pattern come "Roma (RM)" o "Aprilia"
+                # CITTÀ: Filtro rigoroso per escludere P.IVA e troncatura "Legale..."
                 citta_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', full_text)
                 if not citta_match:
                     citta_match = re.search(r'(?:sede|sita|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', full_text, re.IGNORECASE)
                 
                 citta_raw = citta_match.group(1).strip() if citta_match else "Da verificare"
-                # Se la città contiene numeri (es. la P.IVA), la scartiamo
-                citta_pulita = "Verifica Sede" if any(char.isdigit() for char in citta_raw) else citta_raw
+                # Pulizia finale per evitare i bug visti negli screenshot
+                if any(char.isdigit() for char in citta_raw) or "Legale" in citta_raw:
+                    citta_pulita = "Verifica Sede"
+                else:
+                    citta_pulita = citta_raw
 
                 companies.append({
                     "name": title.split(' - ')[0].split('|')[0].strip().upper(),
@@ -50,7 +52,7 @@ def search_decision_maker(company_name):
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Query per scavare nelle prime 5 pagine (circa 50 risultati)
+    # Query per scavare nelle prime 5 pagine
     query = f"(site:linkedin.com/in/ OR site:facebook.com) \"{company_name}\" (Amministratore OR Titolare OR CEO OR Direttore OR Owner)"
     
     try:
@@ -62,26 +64,21 @@ def search_decision_maker(company_name):
         
         for r in res:
             title = r.get('title', '')
-            link = r.get('link', '')
-            
             # Pulizia nome
-            nome = title.split(' - ')[0].split('|')[0].replace("Profilo ", "").replace("LinkedIn", "").replace("Facebook", "").strip()
+            nome = title.split(' - ')[0].split('|')[0].replace("Profilo ", "").replace("LinkedIn", "").strip()
             
-            # Validazione: deve sembrare un nome (2-3 parole)
             if 1 < len(nome.split()) < 4:
-                # Classificazione automatica dei ruoli per dare priorità ai titolari
+                # Priorità ai ruoli decisionali (Rank 1)
                 rank = 1 if any(x in title.lower() for x in ["amm", "titolare", "ceo", "owner", "proprietario"]) else 2
                 
                 if not any(l['name'] == nome for l in leads):
                     leads.append({
                         "name": nome,
                         "rank": rank,
-                        "source": "LinkedIn" if "linkedin" in link else "Facebook/Social",
+                        "source": "LinkedIn" if "linkedin" in r.get('link','') else "Facebook",
                         "emails": [f"info@{domain}.it", f"direzione@{domain}.it", "e.magostini@sunecopower.it"]
                     })
         
-        # Ordiniamo i lead: prima quelli con rank 1 (Titolari/Amministratori)
         leads.sort(key=lambda x: x['rank'])
-        
-        return leads if leads else [{"name": "Direttore Generale", "rank": 3, "source": "Generico", "emails": [f"info@{domain}.it"]}]
+        return leads if leads else [{"name": "Direttore Generale", "rank": 3, "source": "Ufficio Direzione", "emails": [f"info@{domain}.it"]}]
     except: return []
