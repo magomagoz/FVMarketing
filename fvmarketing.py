@@ -32,7 +32,7 @@ if search_button and company_input:
 
         if info_corp and info_corp.get('valid'):
             # Cerchiamo il Direttore Generale
-            lead = search_decision_maker(info_corp['name'])
+            #lead = search_decision_maker(info_corp['name'])
             
             # Salviamo tutto nello stato della sessione
             st.session_state.data_found = {
