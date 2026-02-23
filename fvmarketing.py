@@ -38,20 +38,36 @@ if st.session_state.get('data_found'):
     df = st.session_state.data_found
     
     # CSS per rimpicciolire le metriche e i testi
+    #st.markdown("""
+        #<style>
+        #[data-testid="stMetricValue"] {
+            #font-size: 18px !important;
+        #}
+        #[data-testid="stMetricLabel"] {
+            #font-size: 14px !important;
+        #}
+        #.small-font {
+            #font-size: 14px !important;
+            #color: #555;
+        #}
+        #</style>
+        #""", unsafe_allow_html=True)
+
     st.markdown("""
         <style>
         [data-testid="stMetricValue"] {
-            font-size: 18px !important;
+            font-size: 16px !important; /* Leggermente più piccolo per far stare l'indirizzo */
+            white-space: normal !important;
         }
         [data-testid="stMetricLabel"] {
-            font-size: 14px !important;
-        }
-        .small-font {
-            font-size: 14px !important;
-            color: #555;
+            font-size: 13px !important;
         }
         </style>
         """, unsafe_allow_html=True)
+
+    
+
+    
 
     # DATI AZIENDALI
     with st.container(border=True):
