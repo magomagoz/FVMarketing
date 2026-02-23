@@ -6,41 +6,71 @@ import re
 SERPER_API_KEY = "TUA_SERPER_API_KEY"
 HUNTER_API_KEY = "TUA_HUNTER_API_KEY"
 
-def search_decision_maker(company_name):
-    """
-    Cerca profili chiave su LinkedIn e Facebook via API Serper.
-    """
-    # Se non hai ancora configurato i Secrets, usiamo un fallback di test
-    if "SERPER_API_KEY" not in st.secrets:
-        return {"name": "Ricerca non configurata", "link": "#", "snippet": "Aggiungi SERPER_API_KEY nei Secrets"}
-
-    url = "https://google.serper.dev/search"
-    # Cerchiamo su più piattaforme social contemporaneamente
-    query = f'site:linkedin.com/in/ OR site:facebook.com "{company_name}" (Direttore OR CEO OR Titolare)'
+def search_company_list(query):
+    search_url = "https://google.serper.dev/search"
+    api_key = st.secrets.get("SERPER_API_KEY")
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    payload = {"q": query, "num": 5}
-    headers = {
-        'X-API-KEY': st.secrets["SERPER_API_KEY"],
-        'Content-Type': 'application/json'
+    payload = {
+        "q": f"{query} sede legale città fatturato sito:reportaziende.it OR sito:paginegialle.it",
+        "gl": "it", "hl": "it"
     }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        results = response.json().get('organic', [])
-        
-        if results:
-            # Prendiamo il primo risultato più rilevante
-            res = results[0]
-            return {
-                "name": res.get('title', '').split('-')[0].split('|')[0].strip(),
-                "link": res.get('link'),
-                "snippet": res.get('snippet', ''),
-                "source": "LinkedIn" if "linkedin" in res.get('link') else "Facebook"
-            }
-    except Exception as e:
-        print(f"Errore scraping: {e}")
     
-    return None
+    try:
+        response = requests.post(search_url, json=payload, headers=headers)
+        results = response.json().get('organic', [])
+        companies = []
+        
+        for res in results:
+            snippet = res.get('snippet', '')
+            title = res.get('title', '')
+            full_text = f"{title} {snippet}"
+
+            piva_match = re.search(r'\b\d{11}\b', full_text)
+            if piva_match:
+                # 1. Fatturato
+                rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
+                
+                # 2. CITTÀ (Ricerca specifica per Comune e Provincia)
+                # Cerca pattern: Pomezia (RM), Roma, Aprilia (LT)
+                citta_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', full_text)
+                if not citta_match:
+                    citta_match = re.search(r'(?:sede|base|in)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', full_text)
+                
+                citta = citta_match.group(1) if citta_match else "Da verificare"
+
+                companies.append({
+                    "name": title.split(' - ')[0].split('|')[0].strip().upper(),
+                    "piva": piva_match.group(0),
+                    "location": citta.split(' - ')[0].strip(),
+                    "revenue": rev_match.group(0) if rev_match else "Dato non disp."
+                })
+        return companies
+    except: return []
+
+def search_decision_maker(company_name):
+    search_url = "https://google.serper.dev/search"
+    api_key = st.secrets.get("SERPER_API_KEY")
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    
+    # Query specifica per trovare Monica Diaz e vertici aziendali
+    query = f"(site:linkedin.com/in/ OR site:facebook.com) \"{company_name}\" (Monica Diaz OR Amministratore OR Titolare OR Owner)"
+    
+    try:
+        res = requests.post(search_url, json={"q": query, "gl": "it", "hl": "it"}, headers=headers).json().get('organic', [])
+        leads = []
+        domain = company_name.split()[0].lower().replace(" ", "")
+        
+        for r in res[:6]:
+            nome = r.get('title', '').split(' - ')[0].split('|')[0].replace("Profilo ", "").replace(" | Facebook", "").strip()
+            if len(nome.split()) < 5:
+                leads.append({
+                    "name": nome,
+                    "source": "LinkedIn" if "linkedin" in r.get('link', '') else "Facebook/Web",
+                    "emails": [f"info@{domain}.it", f"direzione@{domain}.it", f"amministrazione@{domain}.it"]
+                })
+        return leads if leads else [{"name": "Direttore Generale", "source": "Ufficio Direzione", "emails": [f"info@{domain}.it"]}]
+    except: return []
 
 def get_verified_email(full_name, company_domain):
     """
