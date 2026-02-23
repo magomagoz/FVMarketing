@@ -4,98 +4,112 @@ from validator import validate_piva_vies
 from scraper import search_decision_maker, get_verified_email
 from mailer import Mailer
 
-# --- CONFIGURAZIONE ---
-# Usa st.secrets per non scrivere la password in chiaro su GitHub!
-mailer = Mailer("smtp.gmail.com", 465, "tua_mail@gmail.com", "tua_password_app")
+# Caricamento Mailer dai Secrets
+mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 
 st.image("banner.png", use_container_width=True)
 
-if 'data_found' not in st.session_state:
-    st.session_state.data_found = None
-
-# --- FASE 1: INPUT (Sidebar) ---
+# --- FASE 1: RICERCA AZIENDA (Sidebar) ---
 with st.sidebar:
-    st.header("Ricerca Azienda")
-    company_input = st.text_input("Nome Azienda o P.IVA")
-    search_button = st.button("Analizza Azienda")
-
-# --- FASE 2: ELABORAZIONE ---
-if search_button and company_input:
-    with st.spinner("Recupero informazioni in corso..."):
-        if company_input.isdigit():
-            info_corp = validate_piva_vies(company_input)
+    st.header("🔍 Trova Azienda")
+    query = st.text_input("Inserisci nome azienda:")
+    
+    if query:
+        with st.spinner("Ricerca in corso..."):
+            aziende_trovate = search_company_list(query)
+            
+        if aziende_trovate:
+            st.write("Qual è quella corretta?")
+            # Mostriamo Nome + un pezzetto di snippet per la località
+            nomi_display = [f"🏢 {a['name']} ({a['location'][:30]}...)" for a in aziende_trovate]
+            scelta_idx = st.radio("Risultati:", range(len(nomi_display)), format_func=lambda x: nomi_display[x])
+            
+            if st.button("✅ ANALIZZA QUESTA"):
+                azienda_scelta = aziende_trovate[scelta_idx]
+                with st.spinner("Cerco i Decision Maker..."):
+                    leads = search_decision_maker(azienda_scelta['name'])
+                    st.session_state.data_found = {
+                        "corp": {"name": azienda_scelta['name'], "address": azienda_scelta['location']},
+                        "leads": leads,
+                        "email": "info@azienda.it" # Mock
+                    }
+                    # Reset della bozza per la nuova azienda
+                    if 'bozza_editor' in st.session_state: del st.session_state.bozza_editor
         else:
-            info_corp = {"name": company_input.title(), "address": "Indirizzo non trovato", "valid": True}
+            st.warning("Nessuna azienda trovata.")
 
-        if info_corp and info_corp.get('valid'):
-            # Prima ricerca veloce per inizializzare
-            leads = search_decision_maker(info_corp['name'])
-            st.session_state.data_found = {
-                "corp": info_corp,
-                "leads": leads, # Salviamo la lista completa
-                "email": "mario.rossi@azienda.it" 
-            }
-            # Reset della bozza quando cambia azienda
-            if 'bozza_editor' in st.session_state:
-                del st.session_state.bozza_editor
-        else:
-            st.error("Impossibile trovare dati validi.")
+# --- FASE 2: VISUALIZZAZIONE E EDITOR ---
+if st.session_state.get('data_found'):
+    data = st.session_state.data_found
+    
+    # Intestazione pulita
+    st.success(f"Analisi per: **{data['corp']['name']}**")
+    
+    # Selezione del Lead (se ce ne sono più di uno)
+    opzioni_lead = [f"{l['name']} ({l['source']})" for l in data['leads']]
+    scelta_lead = st.selectbox("🎯 Destinatario individuato:", opzioni_lead)
+    lead_selezionato = data['leads'][opzioni_lead.index(scelta_lead)]
+    
+    st.divider()
+
 
 # --- FASE 3: VISUALIZZAZIONE ---
 if st.session_state.data_found:
     data = st.session_state.data_found
     
+    # 1. Colonne in alto per i dati (CHIUDIAMOLE SUBITO DOPO)
     col1, col2 = st.columns(2)
-    
     with col1:
         st.subheader("🏢 Dati Aziendali")
         st.write(f"**Ragione Sociale:** {data['corp']['name']}")
-        st.write(f"**Indirizzo:** {data['corp']['address']}")
-    
     with col2:
         st.subheader("👥 Decision Maker")
-        # Usiamo i leads salvati nello stato
         if data.get('leads'):
             opzioni = [f"{l['name']} ({l['source']})" for l in data['leads']]
             scelta = st.selectbox("Seleziona destinatario:", opzioni)
             index_scelto = opzioni.index(scelta)
-            data['lead'] = data['leads'][index_scelto]
-            
-            with st.expander("Dettagli profilo"):
-                st.write(f"📝 *{data['lead']['snippet']}*")
-                st.link_button(f"Vai al profilo {data['lead']['source']}", data['lead']['link'])
-        else:
-            st.warning("Nessun profilo social trovato.")
-            data['lead'] = None
-
+            st.session_state.data_found['lead'] = data['leads'][index_scelto]
+    
+    # 2. USCITA DALLE COLONNE - Torniamo a tutta larghezza
     st.divider()
+
+    # 3. LOGICA NOME E TESTO (Sincronizzazione)
+    # Recuperiamo il nome selezionato sopra
+    current_lead = st.session_state.data_found.get('lead')
+    nome_dest = current_lead['name'] if (current_lead and current_lead.get('name')) else "Direttore"
+
+    # Se la bozza non esiste o abbiamo cambiato azienda, carichiamo il template
+    if 'bozza_editor' not in st.session_state:
+        # Generiamo la prima bozza "sporca" con il nome corretto
+        st.session_state.bozza_editor = f"Gentile {nome_dest},\n\nLe scrivo perché ora l'impianto fotovoltaico per {data['corp']['name']} potrà beneficiare dell'IperAmmortamento 2026..."
+
     st.subheader("📧 Personalizza la Comunicazione")
 
-    # 1. Logica Bozza Pulita
-    nome_dest = data['lead']['name'] if data.get('lead') else "Direttore"
-    corpo_default = f"Gentile {nome_dest},\n\nLe scrivo perché seguo con interesse {data['corp']['name']}..."
-    
-    if 'bozza_editor' not in st.session_state:
-        st.session_state.bozza_editor = corpo_default
-
-    # 2. BOX COMPRIMIBILE (Modifica)
-    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=False):
+    # 4. BOX DI MODIFICA (Largo)
+    with st.expander("📝 Clicca qui per modificare il testo della mail", expanded=True):
         testo_chiaro = st.text_area(
             "Contenuto mail:", 
             value=st.session_state.bozza_editor, 
-            height=250
+            height=300
         )
+        # Salviamo ogni modifica fatta a mano
         st.session_state.bozza_editor = testo_chiaro
 
-    # 3. Trasformazione HTML
-    testo_formattato = testo_chiaro.replace("\n", "<br>")
-    anteprima_html = mailer.generate_body('email_dg.html', {'corpo_testuale': testo_formattato})
-
-    # 4. ANTEPRIMA E INVIO
+    # 5. ANTEPRIMA FINALE (Prende il testo ESATTO dell'editor sopra)
     st.subheader("✍️ Controlla e Invia")
-    with st.container(border=True):
-        st.components.v1.html(anteprima_html, height=350, scrolling=True)
+    
+    # Trasformiamo i ritorni a capo per l'HTML dell'anteprima
+    testo_per_anteprima = st.session_state.bozza_editor.replace("\n", "<br>")
+    
+    # Passiamo il testo modificato alla cornice HTML
+    anteprima_html = mailer.generate_body('email_dg.html', {
+        'corpo_testuale': testo_per_anteprima
+    })
 
+    with st.container(border=True):
+        # Ora l'anteprima mostrerà il nome perché glielo passiamo dentro 'corpo_testuale'
+        st.components.v1.html(anteprima_html, height=400, scrolling=True)
+        
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
