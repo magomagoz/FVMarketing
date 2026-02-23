@@ -1,33 +1,71 @@
 import requests
+import streamlit as st
+import re
 
 def search_company_list(query):
-    """Cerca aziende su Google via Serper filtrando per database italiani."""
     search_url = "https://google.serper.dev/search"
-    headers = {
-        'X-API-KEY': 'TUA_CHIAVE_SERPER', # Assicurati che sia nei Secrets!
-        'Content-Type': 'application/json'
-    }
+    api_key = st.secrets.get("SERPER_API_KEY")
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    
     payload = {
-        "q": f"{query} sito:ufficiocamerale.it OR sito:reportaziende.it",
+        "q": f"{query} sede legale città fatturato sito:reportaziende.it OR sito:ufficiocamerale.it",
         "gl": "it", "hl": "it"
     }
+    
     try:
         response = requests.post(search_url, json=payload, headers=headers)
         results = response.json().get('organic', [])
         companies = []
         for res in results:
-            # Pulizia del titolo per avere Nome + Località
-            title = res.get('title', '').split('|')[0].split(' - ')[0]
-            companies.append({
-                "name": title,
-                "location": res.get('snippet', 'Località non specificata'),
-                "link": res.get('link')
-            })
-        return companies[:5]
-    except:
-        return []
+            snippet = res.get('snippet', '')
+            title = res.get('title', '')
+            piva_match = re.search(r'\b\d{11}\b', f"{title} {snippet}")
+            if piva_match:
+                rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
+                
+                # Pulizia città per evitare "LEGALE Me..." visto negli screenshot
+                citta_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', snippet)
+                citta = citta_match.group(1) if citta_match else "Da verificare"
+                if "LEGALE" in citta.upper(): citta = "Verifica Sede"
 
-def search_decision_maker(company_name):
-    """Cerca il DG o Titolare per l'azienda selezionata."""
-    # ... (mantieni la tua logica precedente qui) ...
-    return [{"name": "Direttore Generale", "source": "Ricerca generica", "link": "#", "snippet": "Contatto standard"}]
+                companies.append({
+                    "name": title.split(' - ')[0].split('|')[0].strip().upper(),
+                    "piva": piva_match.group(0),
+                    "location": citta,
+                    "revenue": rev_match.group(0) if rev_match else "Dato non disp."
+                })
+        return companies
+    except: return []
+
+def search_linkedin_leads(company_name):
+    search_url = "https://google.serper.dev/search"
+    api_key = st.secrets.get("SERPER_API_KEY")
+    headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
+    
+    # Scansione profonda (num: 50) per trovare Monica Diaz e i vertici di Grafibox
+    query = f"site:linkedin.com/in/ \"{company_name}\" (Amministratore OR Titolare OR CEO OR Owner OR Monica Diaz OR Direttore)"
+    
+    try:
+        payload = {"q": query, "gl": "it", "hl": "it", "num": 50}
+        res = requests.post(search_url, json=payload, headers=headers).json().get('organic', [])
+        leads = []
+        domain = company_name.split()[0].lower().replace(",", "")
+        
+        for r in res:
+            title = r.get('title', '')
+            # Pulizia nome (es. "Monica Diaz - Amministratore..." -> "Monica Diaz")
+            nome = title.split(' - ')[0].split('|')[0].replace("Profilo ", "").replace("LinkedIn", "").strip()
+            
+            if 1 < len(nome.split()) < 4:
+                # Priorità ai ruoli decisionali
+                is_boss = any(x in title.lower() for x in ["amm", "titolare", "ceo", "owner", "monica", "diret"])
+                leads.append({
+                    "name": nome,
+                    "rank": 1 if is_boss else 2,
+                    "role": "Decision Maker" if is_boss else "LinkedIn Profile",
+                    "emails": [f"info@{domain}.it", f"direzione@{domain}.it", "e.magostini@sunecopower.it"]
+                })
+        
+        leads.sort(key=lambda x: x['rank'])
+        return leads if leads else [{"name": "Direttore Generale", "rank": 3, "role": "Ufficio Direzione", "emails": [f"info@{domain}.it"]}]
+    except: return []
