@@ -3,7 +3,7 @@ from scraper import search_company_list, search_decision_maker
 from mailer import Mailer
 
 # Setup
-mailer = Mailer("smtp.gmail.com", 465, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
+mailer = Mailer("smtp.gmail.com", 587, st.secrets["MAIL_USER"], st.secrets["MAIL_PASSWORD"])
 st.set_page_config(layout="wide")
 st.image("banner.png", use_container_width=True)
 
@@ -38,8 +38,6 @@ with st.sidebar:
         [data-testid="stMetricLabel"] { font-size: 13px !important; }
         </style>
         """, unsafe_allow_html=True)
-
-# ... (Partie iniziale invariata) ...
 
 if st.session_state.get('data_found'):
     df = st.session_state.data_found
@@ -86,11 +84,6 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
     # Inizializza la bozza se non esiste
     if 'bozza_editor' not in st.session_state:
         st.session_state.bozza_editor = testo_pieno
-
-
-
-
-
     
     # --- LISTA EMAIL APRIBILE ---
     with st.expander("📧 Email individuate (Seleziona)", expanded=False):
@@ -101,6 +94,12 @@ Le informazioni contenute nella presente comunicazione e i relativi allegati pos
         # ... (Assicurati che qui ci sia la logica del testo_pieno definita prima)
         st.session_state.bozza_editor = st.text_area("Contenuto:", value=st.session_state.get('bozza_editor', ''), height=300)
 
+    # --- ANTEPRIMA ---
+    st.subheader("✍️ Anteprima")
+    corpo_html = st.session_state.bozza_editor.replace("\n", "<br>")
+    anteprima = mailer.generate_body('email_dg.html', {'corpo_testuale': corpo_html})
+    st.components.v1.html(anteprima, height=400, scrolling=True)
+    
     # --- CAMPO FINALE EDITABILE ---
     st.divider()
     destinatario_finale = st.text_input("📧 Destinatario finale (Editabile):", value=email_selezionata)
