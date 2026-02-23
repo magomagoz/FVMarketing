@@ -23,7 +23,7 @@ def search_company_list(query):
             if piva_match:
                 rev_match = re.search(r'([\d.,]+\s?(mln|milioni|euro|€))', snippet, re.IGNORECASE)
                 
-                # Pulizia Città: evita "LEGALE Me..." degli screenshot
+                # Pulizia città per evitare "LEGALE Me..." visto negli screenshot
                 citta_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\([A-Z]{2}\))', snippet)
                 citta = citta_match.group(1) if citta_match else "Da verificare"
                 if "LEGALE" in citta.upper(): citta = "Verifica Sede"
@@ -42,8 +42,8 @@ def search_linkedin_leads(company_name):
     api_key = st.secrets.get("SERPER_API_KEY")
     headers = {'X-API-KEY': api_key, 'Content-Type': 'application/json'}
     
-    # Cerchiamo 50 profili LinkedIn (5 pagine Google) per trovare Monica Diaz
-    query = f"site:linkedin.com/in/ \"{company_name}\" (Amministratore OR Titolare OR CEO OR Owner OR Monica Diaz)"
+    # Scansione profonda (num: 50) per trovare Monica Diaz e i vertici di Grafibox
+    query = f"site:linkedin.com/in/ \"{company_name}\" (Amministratore OR Titolare OR CEO OR Owner OR Monica Diaz OR Direttore)"
     
     try:
         payload = {"q": query, "gl": "it", "hl": "it", "num": 50}
@@ -53,12 +53,12 @@ def search_linkedin_leads(company_name):
         
         for r in res:
             title = r.get('title', '')
-            # Pulizia del nome dal titolo LinkedIn
+            # Pulizia nome (es. "Monica Diaz - Amministratore..." -> "Monica Diaz")
             nome = title.split(' - ')[0].split('|')[0].replace("Profilo ", "").replace("LinkedIn", "").strip()
             
             if 1 < len(nome.split()) < 4:
-                # Priorità massima a titolari e amministratori
-                is_boss = any(x in title.lower() for x in ["amm", "titolare", "ceo", "owner", "monica"])
+                # Priorità ai ruoli decisionali
+                is_boss = any(x in title.lower() for x in ["amm", "titolare", "ceo", "owner", "monica", "diret"])
                 leads.append({
                     "name": nome,
                     "rank": 1 if is_boss else 2,
